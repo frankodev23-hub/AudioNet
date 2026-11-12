@@ -43,13 +43,13 @@ export function LanguageProvider({
   children: React.ReactNode;
 }) {
   const [locale, setLocaleState] = useState<Locale>("es");
-  const [ready, setReady] = useState(false);
 
+  // Detectar el idioma al cargar la aplicación.
   useEffect(() => {
     setLocaleState(detectLocale());
-    setReady(true);
   }, []);
 
+  // Cambiar y guardar el idioma seleccionado.
   const setLocale = useCallback((next: Locale) => {
     try {
       localStorage.setItem(STORAGE_KEY, next);
@@ -60,6 +60,7 @@ export function LanguageProvider({
     setLocaleState(next);
   }, []);
 
+  // Traducir textos según el idioma activo.
   const t = useCallback(
     (text: string): string => {
       return translations[locale][text] || text;
@@ -67,6 +68,7 @@ export function LanguageProvider({
     [locale]
   );
 
+  // Actualizar el idioma del documento.
   useEffect(() => {
     document.documentElement.lang = locale;
   }, [locale]);
@@ -83,42 +85,7 @@ export function LanguageProvider({
   return (
     <LanguageContext.Provider value={value}>
       {children}
-
-      {ready && (
-        <LanguageSwitcher
-          locale={locale}
-          setLocale={setLocale}
-        />
-      )}
     </LanguageContext.Provider>
-  );
-}
-
-function LanguageSwitcher({
-  locale,
-  setLocale,
-}: {
-  locale: Locale;
-  setLocale: (locale: Locale) => void;
-}) {
-  return (
-    <label className="fixed bottom-4 right-4 z-[100] flex items-center gap-2 rounded-xl border border-slate-200 bg-white/95 px-3 py-2 text-xs font-semibold text-slate-700 shadow-lg backdrop-blur">
-      <span aria-hidden="true">🌐</span>
-
-      <span className="sr-only">Language</span>
-
-      <select
-        aria-label="Language"
-        value={locale}
-        onChange={(event) =>
-          setLocale(event.target.value as Locale)
-        }
-        className="cursor-pointer bg-transparent outline-none"
-      >
-        <option value="es">Español</option>
-        <option value="en">English</option>
-      </select>
-    </label>
   );
 }
 

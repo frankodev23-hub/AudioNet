@@ -4,6 +4,7 @@ import { useEffect, useState, Suspense } from "react";
 import Link from "next/link";
 import { useParams } from "next/navigation";
 import { useLanguage } from "@/components/LanguageProvider";
+import AppHeader from "@/components/AppHeader";
 
 interface Segment {
   id: string;
@@ -417,426 +418,417 @@ function TranscriptionContent() {
   ];
 
   return (
-    <main className="min-h-screen bg-[#F5F7FB]">
-      <header className="bg-white border-b border-slate-200">
-        <div className="max-w-6xl mx-auto px-6 py-5 flex justify-between items-center">
-          <Link
-            href="/dashboard"
-            className="text-blue-600 font-semibold"
-          >
-            ← {t("Volver al dashboard")}
-          </Link>
+<main className="min-h-screen w-full overflow-x-hidden bg-[#F5F7FB]">
+  <AppHeader />
 
-          <span className="text-xl font-bold text-[#17233D]">
-            AudioNet
+  <div className="w-full max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-8 lg:py-10">
+    {/* ENCABEZADO DE LA TRANSCRIPCIÓN */}
+    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-5 mb-8">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm text-blue-600 font-semibold mb-2">
+          {t("TRANSCRIPCIÓN")}
+        </p>
+
+        <h1 className="text-2xl sm:text-3xl font-bold text-[#17233D] break-words">
+          {data.filename}
+        </h1>
+
+        <p className="text-sm text-slate-500 mt-3 leading-6">
+          {t("Idioma")}: {data.language || "--"} ·{" "}
+          {t("Duración")}: {formatDuration(data.duration)} ·{" "}
+          {t("Segmentos")}:{" "}
+          {data.segment_count ?? data.segments?.length ?? 0}
+        </p>
+      </div>
+
+      <div className="flex flex-col sm:flex-row gap-2 sm:gap-3 w-full lg:w-auto shrink-0">
+        <button
+          onClick={downloadAudio}
+          className="w-full sm:w-auto px-5 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold transition"
+        >
+          {t("Descargar audio")}
+        </button>
+
+        <button
+          onClick={() => {
+            setError("");
+            setShowExport(true);
+          }}
+          disabled={editing}
+          className="w-full sm:w-auto px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold transition disabled:opacity-50"
+        >
+          {t("Exportar documento")}
+        </button>
+      </div>
+    </div>
+
+    {/* MENSAJES DE ERROR */}
+    {error && (
+      <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-600 break-words">
+        {error}
+      </div>
+    )}
+
+    {/* REPORTE ORIGINAL DE PROCESAMIENTO */}
+    <section className="mb-8 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-bold text-[#17233D]">
+            {t("Reporte de procesamiento")}
+          </h2>
+
+          <p className="text-sm text-slate-500 mt-1">
+            {t(
+              "Métricas calculadas sobre el texto original generado por Whisper."
+            )}
+          </p>
+        </div>
+
+        <div className="text-sm text-slate-500 shrink-0">
+          {t("Finalizado")}:{" "}
+          <span className="font-semibold text-slate-700">
+            {formatDateTime(data.completed_at)}
           </span>
         </div>
-      </header>
+      </div>
 
-      <div className="max-w-6xl mx-auto px-6 py-10">
-        <div className="flex flex-col sm:flex-row justify-between gap-5 mb-8">
-          <div>
-            <p className="text-sm text-blue-600 font-semibold mb-2">
-              {t("TRANSCRIPCIÓN")}
+      <div className="p-4 sm:p-6 grid grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
+        {reportCards.map((card) => (
+          <div
+            key={card.label}
+            className="rounded-xl bg-slate-50 border border-slate-100 p-4 min-w-0"
+          >
+            <p className="text-xs text-slate-500">
+              {t(card.label)}
             </p>
 
-            <h1 className="text-3xl font-bold text-[#17233D] break-all">
-              {data.filename}
-            </h1>
-
-            <p className="text-sm text-slate-500 mt-3">
-              {t("Idioma")}: {data.language || "--"} ·{" "}
-              {t("Duración")}: {formatDuration(data.duration)} ·{" "}
-              {t("Segmentos")}:{" "}
-              {data.segment_count ?? data.segments?.length ?? 0}
+            <p className={`text-xl sm:text-2xl font-bold mt-2 break-words ${card.color}`}>
+              {typeof card.value === "number"
+                ? formatNumber(card.value)
+                : card.value}
             </p>
           </div>
+        ))}
+      </div>
 
-          <div className="flex flex-wrap gap-3 h-fit">
-            <button
-              onClick={downloadAudio}
-              className="px-5 py-3 bg-white border border-slate-300 hover:bg-slate-50 text-slate-700 rounded-xl font-semibold"
-            >
-              {t("Descargar audio")}
-            </button>
-
-            <button
-              onClick={() => {
-                setError("");
-                setShowExport(true);
-              }}
-              disabled={editing}
-              className="px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-xl font-semibold disabled:opacity-50"
-            >
-              {t("Exportar documento")}
-            </button>
-          </div>
-        </div>
-
-        {error && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-600">
-            {error}
-          </div>
+      <div className="px-4 sm:px-6 pb-5 sm:pb-6 text-xs text-slate-400">
+        {t(
+          "El reporte conserva las cifras originales aunque edites posteriormente la transcripción."
         )}
+      </div>
+    </section>
 
-        {/* REPORTE ORIGINAL DE PROCESAMIENTO */}
-        <section className="mb-8 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-            <div>
-              <h2 className="text-xl font-bold text-[#17233D]">
-                {t("Reporte de procesamiento")}
+    {/* MODAL DE EXPORTACIÓN */}
+    {showExport && (
+      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4">
+        <div className="bg-white w-full max-w-xl rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden max-h-[94dvh] sm:max-h-[90vh] flex flex-col">
+          {/* CABECERA DEL MODAL */}
+          <div className="p-4 sm:p-6 border-b border-slate-200 flex justify-between items-center gap-4 shrink-0">
+            <div className="min-w-0">
+              <h2 className="text-lg sm:text-xl font-bold text-[#17233D]">
+                {t("Exportar transcripción")}
               </h2>
 
               <p className="text-sm text-slate-500 mt-1">
-                {t(
-                  "Métricas calculadas sobre el texto original generado por Whisper."
-                )}
+                {t("Personaliza tu documento.")}
               </p>
             </div>
 
-            <div className="text-sm text-slate-500">
-              {t("Finalizado")}:{" "}
-              <span className="font-semibold text-slate-700">
-                {formatDateTime(data.completed_at)}
-              </span>
-            </div>
+            <button
+              onClick={() => setShowExport(false)}
+              disabled={exporting}
+              aria-label={t("Cerrar")}
+              className="shrink-0 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg text-2xl disabled:opacity-50"
+            >
+              ×
+            </button>
           </div>
 
-          <div className="p-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {reportCards.map((card) => (
-              <div
-                key={card.label}
-                className="rounded-xl bg-slate-50 border border-slate-100 p-4"
-              >
-                <p className="text-xs text-slate-500">
-                  {t(card.label)}
-                </p>
-
-                <p className={`text-2xl font-bold mt-2 ${card.color}`}>
-                  {typeof card.value === "number"
-                    ? formatNumber(card.value)
-                    : card.value}
-                </p>
-              </div>
-            ))}
-          </div>
-
-          <div className="px-6 pb-6 text-xs text-slate-400">
-            {t(
-              "El reporte conserva las cifras originales aunque edites posteriormente la transcripción."
-            )}
-          </div>
-        </section>
-
-        {/* MODAL DE EXPORTACIÓN */}
-        {showExport && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4">
-            <div className="bg-white w-full max-w-xl rounded-2xl shadow-xl overflow-hidden max-h-[90vh] overflow-y-auto">
-              <div className="p-6 border-b border-slate-200 flex justify-between items-center">
-                <div>
-                  <h2 className="text-xl font-bold text-[#17233D]">
-                    {t("Exportar transcripción")}
-                  </h2>
-
-                  <p className="text-sm text-slate-500 mt-1">
-                    {t("Personaliza tu documento.")}
-                  </p>
-                </div>
-
-                <button
-                  onClick={() => setShowExport(false)}
-                  disabled={exporting}
-                  className="text-slate-400 hover:text-slate-700 text-2xl"
-                >
-                  ×
-                </button>
-              </div>
-
-              <div className="p-6 space-y-5">
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    {t("Formato del documento")}
-                  </label>
-
-                  <div className="grid grid-cols-3 gap-3">
-                    {[
-                      {
-                        value: "docx",
-                        label: "Word",
-                        extension: ".docx",
-                      },
-                      {
-                        value: "pdf",
-                        label: "PDF",
-                        extension: ".pdf",
-                      },
-                      {
-                        value: "txt",
-                        label: t("Texto"),
-                        extension: ".txt",
-                      },
-                    ].map((item) => (
-                      <button
-                        key={item.value}
-                        onClick={() =>
-                          setExportOptions({
-                            ...exportOptions,
-                            format: item.value as ExportOptions["format"],
-                          })
-                        }
-                        className={`p-3 rounded-xl border text-sm font-semibold transition ${
-                          exportOptions.format === item.value
-                            ? "border-blue-600 bg-blue-50 text-blue-700"
-                            : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                        }`}
-                      >
-                        {item.label}
-
-                        <span className="block text-xs font-normal mt-1">
-                          {item.extension}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    {t("Título")}
-                  </label>
-
-                  <input
-                    type="text"
-                    value={exportOptions.title}
-                    onChange={(e) =>
-                      setExportOptions({
-                        ...exportOptions,
-                        title: e.target.value,
-                      })
-                    }
-                    style={{ colorScheme: "light" }}
-                    className="w-full bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-sm outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
-                    placeholder={t("Título del documento")}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    {t("Encabezado")}
-                  </label>
-
-                  <input
-                    type="text"
-                    value={exportOptions.header}
-                    onChange={(e) =>
-                      setExportOptions({
-                        ...exportOptions,
-                        header: e.target.value,
-                      })
-                    }
-                    className="w-full bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-sm outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
-                    placeholder={t("Ej. AudioNet")}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold text-slate-700 mb-2">
-                    {t("Subtítulo")}
-                  </label>
-
-                  <input
-                    type="text"
-                    value={exportOptions.subtitle}
-                    onChange={(e) =>
-                      setExportOptions({
-                        ...exportOptions,
-                        subtitle: e.target.value,
-                      })
-                    }
-                    className="w-full bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-sm outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
-                    placeholder={t("Descripción adicional (opcional)")}
-                  />
-                </div>
-
-                <div className="border-t border-slate-100 pt-5 space-y-4">
-                  <p className="text-sm font-semibold text-slate-700">
-                    {t("Opciones adicionales")}
-                  </p>
-
-                  {[
-                    {
-                      key: "include_date",
-                      label: "Incluir fecha y hora",
-                    },
-                    {
-                      key: "include_audio_info",
-                      label: "Incluir nombre del archivo de audio",
-                    },
-                    {
-                      key: "include_timestamps",
-                      label: "Incluir marcas de tiempo",
-                    },
-                  ].map((option) => (
-                    <label
-                      key={option.key}
-                      className="flex items-center gap-3 cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={
-                          exportOptions[
-                            option.key as keyof ExportOptions
-                          ] as boolean
-                        }
-                        onChange={(e) =>
-                          setExportOptions({
-                            ...exportOptions,
-                            [option.key]: e.target.checked,
-                          })
-                        }
-                        className="w-4 h-4 accent-blue-600"
-                      />
-
-                      <span className="text-sm text-slate-600">
-                        {t(option.label)}
-                      </span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-
-              <div className="p-6 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3">
-                <button
-                  onClick={() => setShowExport(false)}
-                  disabled={exporting}
-                  className="px-5 py-3 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-white disabled:opacity-50"
-                >
-                  {t("Cancelar")}
-                </button>
-
-                <button
-                  onClick={exportTranscription}
-                  disabled={exporting}
-                  className="px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold disabled:opacity-50"
-                >
-                  {exporting
-                    ? t("Generando documento...")
-                    : t("Descargar documento")}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* TEXTO TRANSCRITO */}
-        <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-          <div className="p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center">
+          {/* CONTENIDO DEL MODAL */}
+          <div className="p-4 sm:p-6 space-y-5 overflow-y-auto min-h-0">
             <div>
-              <h2 className="text-xl font-bold text-[#17233D]">
-                {t("Texto transcrito")}
-              </h2>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                {t("Formato del documento")}
+              </label>
 
-              <p className="text-sm text-slate-500 mt-1">
-                {t("Puedes editar y corregir el contenido.")}
-              </p>
+              <div className="grid grid-cols-3 gap-2 sm:gap-3">
+                {[
+                  {
+                    value: "docx",
+                    label: "Word",
+                    extension: ".docx",
+                  },
+                  {
+                    value: "pdf",
+                    label: "PDF",
+                    extension: ".pdf",
+                  },
+                  {
+                    value: "txt",
+                    label: t("Texto"),
+                    extension: ".txt",
+                  },
+                ].map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    onClick={() =>
+                      setExportOptions({
+                        ...exportOptions,
+                        format: item.value as ExportOptions["format"],
+                      })
+                    }
+                    className={`p-2 sm:p-3 rounded-xl border text-sm font-semibold transition ${
+                      exportOptions.format === item.value
+                        ? "border-blue-600 bg-blue-50 text-blue-700"
+                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                    }`}
+                  >
+                    {item.label}
+
+                    <span className="block text-xs font-normal mt-1">
+                      {item.extension}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
-            {!editing ? (
-              <button
-                onClick={() => {
-                  setEditedText(data.transcript_text || "");
-                  setEditing(true);
-                  setError("");
-                }}
-                className="px-4 py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm"
-              >
-                {t("Editar texto")}
-              </button>
-            ) : (
-              <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setEditedText(data.transcript_text || "");
-                    setEditing(false);
-                    setError("");
-                  }}
-                  disabled={saving}
-                  className="px-4 py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm disabled:opacity-50"
-                >
-                  {t("Cancelar")}
-                </button>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                {t("Título")}
+              </label>
 
-                <button
-                  onClick={saveTranscription}
-                  disabled={saving}
-                  className="px-4 py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50"
-                >
-                  {saving
-                    ? t("Guardando...")
-                    : t("Guardar cambios")}
-                </button>
-              </div>
-            )}
-          </div>
-
-          <div className="p-6 sm:p-10">
-            {editing ? (
-              <textarea
-                value={editedText}
-                onChange={(e) => setEditedText(e.target.value)}
-                rows={18}
-                className="w-full border border-slate-200 rounded-xl p-5 text-slate-700 leading-8 outline-none focus:border-blue-500 resize-y"
-                placeholder={t(
-                  "Escribe o corrige la transcripción..."
-                )}
+              <input
+                type="text"
+                value={exportOptions.title}
+                onChange={(e) =>
+                  setExportOptions({
+                    ...exportOptions,
+                    title: e.target.value,
+                  })
+                }
+                style={{ colorScheme: "light" }}
+                className="w-full min-w-0 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                placeholder={t("Título del documento")}
               />
-            ) : (
-              <div className="text-slate-700 leading-8 whitespace-pre-wrap">
-                {data.transcript_text || t("No hay texto disponible.")}
-              </div>
-            )}
-          </div>
-        </section>
-
-        {/* SEGMENTOS ORIGINALES */}
-        {data.segments && data.segments.length > 0 && (
-          <section className="mt-8 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
-            <div className="p-6 border-b border-slate-100">
-              <h2 className="text-xl font-bold text-[#17233D]">
-                {t("Segmentos originales")}
-              </h2>
-
-              <p className="text-sm text-slate-500 mt-1">
-                {t(
-                  "Texto original dividido por marcas de tiempo."
-                )}
-              </p>
             </div>
 
-            <div className="p-6 sm:p-10 space-y-5">
-              {data.segments.map((segment) => (
-                <div
-                  key={segment.id || segment.segment_order}
-                  className="flex gap-5"
-                >
-                  <span className="text-xs font-mono text-blue-600 bg-blue-50 rounded-lg px-2 py-1 h-fit whitespace-nowrap">
-                    {formatTime(segment.start_time)}
-                  </span>
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                {t("Encabezado")}
+              </label>
 
-                  <p className="text-slate-700 leading-8">
-                    {segment.text}
-                  </p>
-                </div>
+              <input
+                type="text"
+                value={exportOptions.header}
+                onChange={(e) =>
+                  setExportOptions({
+                    ...exportOptions,
+                    header: e.target.value,
+                  })
+                }
+                className="w-full min-w-0 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                placeholder={t("Ej. AudioNet")}
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                {t("Subtítulo")}
+              </label>
+
+              <input
+                type="text"
+                value={exportOptions.subtitle}
+                onChange={(e) =>
+                  setExportOptions({
+                    ...exportOptions,
+                    subtitle: e.target.value,
+                  })
+                }
+                className="w-full min-w-0 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+                placeholder={t("Descripción adicional (opcional)")}
+              />
+            </div>
+
+            {/* OPCIONES ADICIONALES */}
+            <div className="border-t border-slate-100 pt-5 space-y-4">
+              <p className="text-sm font-semibold text-slate-700">
+                {t("Opciones adicionales")}
+              </p>
+
+              {[
+                {
+                  key: "include_date",
+                  label: "Incluir fecha y hora",
+                },
+                {
+                  key: "include_audio_info",
+                  label: "Incluir nombre del archivo de audio",
+                },
+                {
+                  key: "include_timestamps",
+                  label: "Incluir marcas de tiempo",
+                },
+              ].map((option) => (
+                <label
+                  key={option.key}
+                  className="flex items-center gap-3 cursor-pointer min-h-8"
+                >
+                  <input
+                    type="checkbox"
+                    checked={
+                      exportOptions[
+                        option.key as keyof ExportOptions
+                      ] as boolean
+                    }
+                    onChange={(e) =>
+                      setExportOptions({
+                        ...exportOptions,
+                        [option.key]: e.target.checked,
+                      })
+                    }
+                    className="w-5 h-5 shrink-0 accent-blue-600"
+                  />
+
+                  <span className="text-sm text-slate-600">
+                    {t(option.label)}
+                  </span>
+                </label>
               ))}
             </div>
-          </section>
-        )}
+          </div>
 
-        <div className="mt-6 text-sm text-slate-400">
-          AudioNet · {t("Transcripción")} {data.id}
+          {/* BOTONES DEL MODAL */}
+          <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3 shrink-0">
+            <button
+              onClick={() => setShowExport(false)}
+              disabled={exporting}
+              className="w-full sm:w-auto px-5 py-3 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-white disabled:opacity-50"
+            >
+              {t("Cancelar")}
+            </button>
+
+            <button
+              onClick={exportTranscription}
+              disabled={exporting}
+              className="w-full sm:w-auto px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold disabled:opacity-50"
+            >
+              {exporting
+                ? t("Generando documento...")
+                : t("Descargar documento")}
+            </button>
+          </div>
         </div>
       </div>
-    </main>
+    )}
+
+    {/* TEXTO TRANSCRITO */}
+    <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+      <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col sm:flex-row justify-between gap-4 items-start sm:items-center">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-bold text-[#17233D]">
+            {t("Texto transcrito")}
+          </h2>
+
+          <p className="text-sm text-slate-500 mt-1">
+            {t("Puedes editar y corregir el contenido.")}
+          </p>
+        </div>
+
+        {!editing ? (
+          <button
+            onClick={() => {
+              setEditedText(data.transcript_text || "");
+              setEditing(true);
+              setError("");
+            }}
+            className="w-full sm:w-auto px-4 py-3 sm:py-2 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm"
+          >
+            {t("Editar texto")}
+          </button>
+        ) : (
+          <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+            <button
+              onClick={() => {
+                setEditedText(data.transcript_text || "");
+                setEditing(false);
+                setError("");
+              }}
+              disabled={saving}
+              className="w-full sm:w-auto px-4 py-3 sm:py-2 rounded-lg border border-slate-300 hover:bg-slate-50 text-slate-700 text-sm disabled:opacity-50"
+            >
+              {t("Cancelar")}
+            </button>
+
+            <button
+              onClick={saveTranscription}
+              disabled={saving}
+              className="w-full sm:w-auto px-4 py-3 sm:py-2 rounded-lg bg-green-600 hover:bg-green-700 text-white text-sm font-semibold disabled:opacity-50"
+            >
+              {saving
+                ? t("Guardando...")
+                : t("Guardar cambios")}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="p-4 sm:p-6 lg:p-10">
+        {editing ? (
+          <textarea
+            value={editedText}
+            onChange={(e) => setEditedText(e.target.value)}
+            rows={18}
+            className="w-full min-w-0 border border-slate-200 rounded-xl p-3 sm:p-5 text-slate-700 leading-7 sm:leading-8 outline-none focus:border-blue-500 resize-y text-base"
+            placeholder={t("Escribe o corrige la transcripción...")}
+          />
+        ) : (
+          <div className="text-slate-700 leading-7 sm:leading-8 whitespace-pre-wrap break-words">
+            {data.transcript_text || t("No hay texto disponible.")}
+          </div>
+        )}
+      </div>
+    </section>
+
+    {/* SEGMENTOS ORIGINALES */}
+    {data.segments && data.segments.length > 0 && (
+      <section className="mt-8 bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">
+        <div className="p-4 sm:p-6 border-b border-slate-100">
+          <h2 className="text-lg sm:text-xl font-bold text-[#17233D]">
+            {t("Segmentos originales")}
+          </h2>
+
+          <p className="text-sm text-slate-500 mt-1">
+            {t("Texto original dividido por marcas de tiempo.")}
+          </p>
+        </div>
+
+        <div className="p-4 sm:p-6 lg:p-10 space-y-5">
+          {data.segments.map((segment) => (
+            <div
+              key={segment.id || segment.segment_order}
+              className="flex flex-col min-[420px]:flex-row gap-2 sm:gap-5 min-w-0"
+            >
+              <span className="text-xs font-mono text-blue-600 bg-blue-50 rounded-lg px-2 py-1 h-fit whitespace-nowrap self-start">
+                {formatTime(segment.start_time)}
+              </span>
+
+              <p className="text-slate-700 leading-7 sm:leading-8 break-words min-w-0">
+                {segment.text}
+              </p>
+            </div>
+          ))}
+        </div>
+      </section>
+    )}
+
+    <div className="mt-6 text-sm text-slate-400 break-words">
+      AudioNet · {t("Transcripción")} {data.id}
+    </div>
+  </div>
+</main>
   );
 }
 
