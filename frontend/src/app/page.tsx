@@ -216,6 +216,16 @@ export default function Home() {
 
           </form>
 
+          <div className="mt-8 text-center text-sm text-slate-500">
+  ¿No tienes una cuenta?{" "}
+  <a
+    href="/register"
+    className="font-semibold text-blue-600 hover:text-blue-800"
+  >
+    Regístrate gratis
+  </a>
+</div>
+
           <div className="mt-10 pt-6 border-t border-slate-200">
             <p className="text-center text-xs text-slate-400">
               Acceso seguro mediante autenticacion de Supabase.

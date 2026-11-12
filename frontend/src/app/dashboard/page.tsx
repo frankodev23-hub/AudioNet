@@ -18,9 +18,18 @@ interface User {
   email: string;
 }
 
+interface Usage {
+  total_seconds: number;
+  total_minutes: number;
+  current_month_seconds: number;
+  transcription_count: number;
+}
+
 export default function DashboardPage() {
   const API_URL =
     process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
+
+    const [usage, setUsage] = useState<Usage | null>(null);
 
   const [user, setUser] = useState<User | null>(null);
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([]);
@@ -60,20 +69,28 @@ export default function DashboardPage() {
     setError("");
 
     try {
-      const [userResponse, historyResponse] = await Promise.all([
-        apiRequest("/auth/me"),
-        apiRequest("/transcriptions?limit=100&offset=0"),
-      ]);
+        const [userResponse, historyResponse, usageResponse] =
+        await Promise.all([
+            apiRequest("/auth/me"),
+            apiRequest("/transcriptions?limit=100&offset=0"),
+            apiRequest("/usage/me"),
+        ]);
 
-      if (!userResponse.ok || !historyResponse.ok) {
+        if (
+        !userResponse.ok ||
+        !historyResponse.ok ||
+        !usageResponse.ok
+        ) {
         throw new Error("No se pudieron cargar los datos");
-      }
+        }
 
       const userData = await userResponse.json();
       const historyData = await historyResponse.json();
+      const usageData = await usageResponse.json();
 
       setUser(userData);
       setTranscriptions(historyData.transcriptions || []);
+      setUsage(usageData);
     } catch (err) {
       setError(
         err instanceof Error ? err.message : "Error de conexion"
@@ -337,6 +354,56 @@ export default function DashboardPage() {
           ))}
 
         </div>
+
+        {/* USAGE STATISTICS */}
+
+<section className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
+
+  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+    <p className="text-sm text-slate-500">
+      Consumo total
+    </p>
+
+    <p className="text-3xl font-bold text-blue-600 mt-3">
+      {loading ? "..." : `${Number(usage?.total_minutes || 0).toFixed(2)} min`}
+    </p>
+
+    <p className="text-xs text-slate-400 mt-2">
+      Desde la creación de tu cuenta
+    </p>
+  </div>
+
+  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+    <p className="text-sm text-slate-500">
+      Consumo este mes
+    </p>
+
+    <p className="text-3xl font-bold text-indigo-600 mt-3">
+      {loading
+        ? "..."
+        : `${(Number(usage?.current_month_seconds || 0) / 60).toFixed(2)} min`}
+    </p>
+
+    <p className="text-xs text-slate-400 mt-2">
+      Minutos procesados durante este mes
+    </p>
+  </div>
+
+  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+    <p className="text-sm text-slate-500">
+      Audios contabilizados
+    </p>
+
+    <p className="text-3xl font-bold text-green-600 mt-3">
+      {loading ? "..." : usage?.transcription_count ?? 0}
+    </p>
+
+    <p className="text-xs text-slate-400 mt-2">
+      Transcripciones procesadas correctamente
+    </p>
+  </div>
+
+</section>
 
         {/* UPLOAD */}
 

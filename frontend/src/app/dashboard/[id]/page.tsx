@@ -522,18 +522,19 @@ function TranscriptionContent() {
                     Titulo
                   </label>
 
-                  <input
-                    type="text"
-                    value={exportOptions.title}
-                    onChange={(e) =>
-                      setExportOptions({
-                        ...exportOptions,
-                        title: e.target.value,
-                      })
-                    }
-                    className="w-full border border-slate-300 rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500"
-                    placeholder="Titulo del documento"
-                  />
+<input
+  type="text"
+  value={exportOptions.title}
+  onChange={(e) =>
+    setExportOptions({
+      ...exportOptions,
+      title: e.target.value,
+    })
+  }
+  style={{ colorScheme: "light" }}
+  className="w-full bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-sm outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
+  placeholder="Título del documento"
+/>
                 </div>
 
                 {/* HEADER */}
@@ -552,7 +553,7 @@ function TranscriptionContent() {
                         header: e.target.value,
                       })
                     }
-                    className="w-full border border-slate-300 rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500"
+                    className="w-full bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-sm outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
                     placeholder="Ej. AudioNet"
                   />
                 </div>
@@ -573,7 +574,7 @@ function TranscriptionContent() {
                         subtitle: e.target.value,
                       })
                     }
-                    className="w-full border border-slate-300 rounded-lg px-4 py-3 text-sm outline-none focus:border-blue-500"
+                    className="w-full bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-sm outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
                     placeholder="Descripcion adicional (opcional)"
                   />
                 </div>

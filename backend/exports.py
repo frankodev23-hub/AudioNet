@@ -29,8 +29,26 @@ def format_time(seconds):
 
 def get_transcription_text(transcription, include_timestamps=False):
 
+    transcript_text = transcription.get("transcript_text", "").strip()
     segments = transcription.get("segments", [])
 
+    original_text = " ".join(
+        segment.get("text", "").strip()
+        for segment in segments
+    ).strip()
+
+    # Detectar si el texto fue editado
+    is_edited = (
+        transcript_text
+        and original_text
+        and transcript_text != original_text
+    )
+
+    # Si fue editado, priorizar siempre la versión modificada
+    if is_edited:
+        return transcript_text
+
+    # Si no fue editado, permitir exportar con marcas de tiempo
     if include_timestamps and segments:
         lines = []
 
@@ -38,13 +56,13 @@ def get_transcription_text(transcription, include_timestamps=False):
             timestamp = format_time(
                 segment.get("start_time", segment.get("start", 0))
             )
-            text = segment.get("text", "").strip()
 
+            text = segment.get("text", "").strip()
             lines.append(f"[{timestamp}] {text}")
 
         return "\n\n".join(lines)
 
-    return transcription.get("transcript_text", "")
+    return transcript_text
 
 
 def generate_txt(transcription, options):

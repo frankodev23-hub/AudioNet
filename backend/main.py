@@ -41,6 +41,8 @@ from database import (
     create_transcription,
     complete_transcription,
     fail_transcription,
+    record_usage,
+    get_user_usage,
     save_segments,
     get_transcriptions,
     get_transcription,
@@ -59,10 +61,12 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000",
-        "http://127.0.0.1:3000"
-    ],
+allow_origins=[
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "https://musical-flan-ee1cd7.netlify.app"
+],
+allow_origin_regex=r"https://.*\.netlify\.app",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -90,6 +94,11 @@ security = HTTPBearer(auto_error=False)
 # =========================================
 
 class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+class RegisterRequest(BaseModel):
+    full_name: str
     email: str
     password: str
 
@@ -204,6 +213,71 @@ async def get_me(
         "id": current_user["id"],
         "email": current_user.get("email")
     }
+
+@app.get("/usage/me")
+def my_usage(
+    current_user: dict = Depends(get_current_user)
+):
+    try:
+        return get_user_usage(current_user["id"])
+    except Exception:
+        raise HTTPException(
+            status_code=500,
+            detail="Usage retrieval error"
+        )
+
+@app.post("/auth/register")
+async def register(data: RegisterRequest):
+
+    if not SUPABASE_URL or not SUPABASE_ANON_KEY:
+        raise HTTPException(
+            status_code=500,
+            detail="Supabase authentication is not configured"
+        )
+
+    headers = {
+        "apikey": SUPABASE_ANON_KEY,
+        "Content-Type": "application/json"
+    }
+
+    payload = {
+        "email": data.email.strip().lower(),
+        "password": data.password,
+        "data": {
+            "full_name": data.full_name.strip()
+        }
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=20) as client:
+
+            response = await client.post(
+                f"{SUPABASE_URL}/auth/v1/signup",
+                headers=headers,
+                json=payload
+            )
+
+            if response.status_code not in (200, 201):
+                raise HTTPException(
+                    status_code=400,
+                    detail="No se pudo crear la cuenta. Verifica los datos."
+                )
+
+            result = response.json()
+
+            return {
+                "message": "Cuenta creada. Revisa tu correo para verificarla.",
+                "user": result.get("user")
+            }
+
+    except HTTPException:
+        raise
+
+    except httpx.HTTPError:
+        raise HTTPException(
+            status_code=503,
+            detail="Authentication service unavailable"
+        )
 
 
 # =========================================
@@ -374,6 +448,12 @@ async def upload_and_transcribe(
                 "status": "completed",
                 "completed_at": datetime.now(timezone.utc).isoformat()
             }
+        )
+
+        record_usage(
+            user_id=user_id,
+            transcription_id=transcription_id,
+            duration_seconds=output.get("duration", 0)
         )
 
         return {

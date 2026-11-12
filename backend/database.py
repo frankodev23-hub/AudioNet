@@ -208,3 +208,47 @@ def update_transcription_text(
         return None
 
     return response.data[0]
+
+
+def record_usage(
+    user_id: str,
+    transcription_id: str,
+    duration_seconds: float
+):
+    if not user_id or not transcription_id:
+        raise ValueError("User ID and transcription ID are required")
+
+    duration = max(float(duration_seconds), 0)
+
+    response = (
+        supabase
+        .table("usage_records")
+        .upsert(
+            {
+                "user_id": user_id,
+                "transcription_id": transcription_id,
+                "duration_seconds": duration
+            },
+            on_conflict="transcription_id"
+        )
+        .execute()
+    )
+
+    return response.data[0] if response.data else None
+
+
+def get_user_usage(user_id: str):
+    response = supabase.rpc(
+        "get_user_usage",
+        {"target_user_id": user_id}
+    ).execute()
+
+    if not response.data:
+        return {
+            "total_seconds": 0,
+            "total_minutes": 0,
+            "current_month_seconds": 0,
+            "transcription_count": 0
+        }
+
+    return response.data[0]
