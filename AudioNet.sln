@@ -1,0 +1,23 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37906.3 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{888888A0-9F3D-457C-B088-3A5042F75D52}") = "AudioNet", "AudioNet.pyproj", "{104C8BA6-EA11-44C6-B4DA-65B9EDB2B10B}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{104C8BA6-EA11-44C6-B4DA-65B9EDB2B10B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{104C8BA6-EA11-44C6-B4DA-65B9EDB2B10B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {6DC51530-65F0-4E35-8DCB-00682895C0C9}
+	EndGlobalSection
+EndGlobal
