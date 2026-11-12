@@ -35,13 +35,80 @@ interface Transcription {
 
 interface ExportOptions {
   format: "docx" | "pdf" | "txt";
+  document_type:
+    | "standard"
+    | "academic"
+    | "song"
+    | "poem"
+    | "speech"
+    | "sermon"
+    | "interview"
+    | "meeting"
+    | "judicial";
+
   title: string;
   header: string;
   subtitle: string;
+  author: string;
+
   include_date: boolean;
   include_audio_info: boolean;
   include_timestamps: boolean;
+  include_page_numbers: boolean;
+
+  country: string;
+  jurisdiction: string;
+  court: string;
+  case_number: string;
+  proceeding_type: string;
+  parties: string;
+  judge: string;
+  prosecutor: string;
+  attorneys: string;
+  clerk: string;
+  hearing_date: string;
+  hearing_location: string;
+  hearing_number: string;
+  transcriber: string;
+
+  participants: string[];
+  include_line_numbers: boolean;
+  include_participant_index: boolean;
 }
+
+const judicialFields: {
+  key: keyof ExportOptions;
+  label: string;
+}[] = [
+  { key: "country", label: "País" },
+  { key: "jurisdiction", label: "Jurisdicción" },
+  { key: "court", label: "Tribunal / juzgado" },
+  { key: "case_number", label: "Número de expediente / causa" },
+  { key: "proceeding_type", label: "Tipo de procedimiento" },
+  { key: "parties", label: "Partes involucradas" },
+  { key: "judge", label: "Juez / magistrado" },
+  { key: "prosecutor", label: "Fiscal" },
+  { key: "attorneys", label: "Abogados / defensores" },
+  { key: "clerk", label: "Secretario / funcionario" },
+  { key: "hearing_date", label: "Fecha de audiencia" },
+  { key: "hearing_location", label: "Lugar de audiencia" },
+  { key: "hearing_number", label: "Número de audiencia / sesión" },
+  { key: "transcriber", label: "Transcriptor" },
+];
+
+const judicialCheckboxes: {
+  key: "include_line_numbers" | "include_participant_index";
+  label: string;
+}[] = [
+  {
+    key: "include_line_numbers",
+    label: "Numerar las líneas de la transcripción",
+  },
+  {
+    key: "include_participant_index",
+    label: "Incluir índice de participantes",
+  },
+];
 
 function TranscriptionContent() {
   const params = useParams();
@@ -60,15 +127,39 @@ function TranscriptionContent() {
   const [showExport, setShowExport] = useState(false);
   const [exporting, setExporting] = useState(false);
 
-  const [exportOptions, setExportOptions] = useState<ExportOptions>({
-    format: "docx",
-    title: "Transcripción",
-    header: "AudioNet",
-    subtitle: "",
-    include_date: true,
-    include_audio_info: true,
-    include_timestamps: false,
-  });
+const [exportOptions, setExportOptions] = useState<ExportOptions>({
+  format: "docx",
+  document_type: "standard",
+
+  title: "Transcripción",
+  header: "AudioNet",
+  subtitle: "",
+  author: "",
+
+  include_date: true,
+  include_audio_info: true,
+  include_timestamps: false,
+  include_page_numbers: true,
+
+  country: "",
+  jurisdiction: "",
+  court: "",
+  case_number: "",
+  proceeding_type: "",
+  parties: "",
+  judge: "",
+  prosecutor: "",
+  attorneys: "",
+  clerk: "",
+  hearing_date: "",
+  hearing_location: "",
+  hearing_number: "",
+  transcriber: "",
+
+  participants: [],
+  include_line_numbers: false,
+  include_participant_index: false,
+});
 
   // Actualizar el título predeterminado según el idioma seleccionado.
   useEffect(() => {
@@ -518,211 +609,345 @@ function TranscriptionContent() {
       </div>
     </section>
 
-    {/* MODAL DE EXPORTACIÓN */}
-    {showExport && (
-      <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4">
-        <div className="bg-white w-full max-w-xl rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden max-h-[94dvh] sm:max-h-[90vh] flex flex-col">
-          {/* CABECERA DEL MODAL */}
-          <div className="p-4 sm:p-6 border-b border-slate-200 flex justify-between items-center gap-4 shrink-0">
-            <div className="min-w-0">
-              <h2 className="text-lg sm:text-xl font-bold text-[#17233D]">
-                {t("Exportar transcripción")}
-              </h2>
+{/* MODAL DE EXPORTACIÓN */}
+{showExport && (
+  <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-slate-900/50 p-0 sm:p-4">
+    <div className="bg-white w-full max-w-xl rounded-t-2xl sm:rounded-2xl shadow-xl overflow-hidden max-h-[94dvh] sm:max-h-[90vh] flex flex-col">
+      {/* CABECERA */}
+      <div className="p-4 sm:p-6 border-b border-slate-200 flex justify-between items-center gap-4 shrink-0">
+        <div className="min-w-0">
+          <h2 className="text-lg sm:text-xl font-bold text-[#17233D]">
+            {t("Exportar transcripción")}
+          </h2>
+          <p className="text-sm text-slate-500 mt-1">
+            {t("Personaliza tu documento.")}
+          </p>
+        </div>
 
-              <p className="text-sm text-slate-500 mt-1">
-                {t("Personaliza tu documento.")}
-              </p>
-            </div>
+        <button
+          type="button"
+          onClick={() => setShowExport(false)}
+          disabled={exporting}
+          aria-label={t("Cerrar")}
+          className="shrink-0 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg text-2xl disabled:opacity-50"
+        >
+          ×
+        </button>
+      </div>
 
-            <button
-              onClick={() => setShowExport(false)}
-              disabled={exporting}
-              aria-label={t("Cerrar")}
-              className="shrink-0 w-10 h-10 flex items-center justify-center text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-lg text-2xl disabled:opacity-50"
-            >
-              ×
-            </button>
+      {/* CONTENIDO */}
+      <div className="p-4 sm:p-6 space-y-5 overflow-y-auto min-h-0">
+        {/* FORMATO */}
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">
+            {t("Formato del documento")}
+          </label>
+
+          <div className="grid grid-cols-3 gap-2 sm:gap-3">
+            {[
+              { value: "docx", label: "Word", extension: ".docx" },
+              { value: "pdf", label: "PDF", extension: ".pdf" },
+              { value: "txt", label: t("Texto"), extension: ".txt" },
+            ].map((item) => (
+              <button
+                key={item.value}
+                type="button"
+                onClick={() =>
+                  setExportOptions((current) => ({
+                    ...current,
+                    format: item.value as ExportOptions["format"],
+                  }))
+                }
+                className={`p-2 sm:p-3 rounded-xl border text-sm font-semibold transition ${
+                  exportOptions.format === item.value
+                    ? "border-blue-600 bg-blue-50 text-blue-700"
+                    : "border-slate-200 text-slate-600 hover:bg-slate-50"
+                }`}
+              >
+                {item.label}
+                <span className="block text-xs font-normal mt-1">
+                  {item.extension}
+                </span>
+              </button>
+            ))}
           </div>
+        </div>
 
-          {/* CONTENIDO DEL MODAL */}
-          <div className="p-4 sm:p-6 space-y-5 overflow-y-auto min-h-0">
+        {/* TIPO DE DOCUMENTO */}
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">
+            {t("Tipo de documento")}
+          </label>
+
+          <select
+            value={exportOptions.document_type}
+            onChange={(e) =>
+              setExportOptions((current) => ({
+                ...current,
+                document_type: e.target.value as ExportOptions["document_type"],
+              }))
+            }
+            className="w-full bg-white text-slate-900 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+          >
+            <option value="standard">{t("General")}</option>
+            <option value="academic">{t("Académico")}</option>
+            <option value="song">{t("Canción")}</option>
+            <option value="poem">{t("Poema")}</option>
+            <option value="speech">{t("Discurso")}</option>
+            <option value="sermon">{t("Prédica")}</option>
+            <option value="interview">{t("Entrevista")}</option>
+            <option value="meeting">{t("Reunión")}</option>
+            <option value="judicial">{t("Documento judicial")}</option>
+          </select>
+
+          <p className="text-xs text-slate-500 mt-2">
+            {t("El diseño del documento se adaptará al tipo seleccionado.")}
+          </p>
+        </div>
+
+        {/* TÍTULO */}
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">
+            {t("Título")}
+          </label>
+
+          <input
+            type="text"
+            value={exportOptions.title}
+            onChange={(e) =>
+              setExportOptions((current) => ({
+                ...current,
+                title: e.target.value,
+              }))
+            }
+            className="w-full bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            placeholder={t("Título del documento")}
+          />
+        </div>
+
+        {/* ENCABEZADO */}
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">
+            {t("Encabezado")}
+          </label>
+
+          <input
+            type="text"
+            value={exportOptions.header}
+            onChange={(e) =>
+              setExportOptions((current) => ({
+                ...current,
+                header: e.target.value,
+              }))
+            }
+            className="w-full bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            placeholder={t("Ej. AudioNet")}
+          />
+        </div>
+
+        {/* SUBTÍTULO */}
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">
+            {t("Subtítulo")}
+          </label>
+
+          <input
+            type="text"
+            value={exportOptions.subtitle}
+            onChange={(e) =>
+              setExportOptions((current) => ({
+                ...current,
+                subtitle: e.target.value,
+              }))
+            }
+            className="w-full bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            placeholder={t("Descripción adicional (opcional)")}
+          />
+        </div>
+
+        {/* AUTOR */}
+        <div>
+          <label className="block text-sm font-semibold text-slate-700 mb-2">
+            {t("Autor / responsable")}
+          </label>
+
+          <input
+            type="text"
+            value={exportOptions.author}
+            onChange={(e) =>
+              setExportOptions((current) => ({
+                ...current,
+                author: e.target.value,
+              }))
+            }
+            className="w-full bg-white text-slate-900 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            placeholder={t("Nombre del autor o responsable (opcional)")}
+          />
+        </div>
+
+        {/* INFORMACIÓN JUDICIAL */}
+        {exportOptions.document_type === "judicial" && (
+          <div className="border border-blue-200 bg-blue-50/50 rounded-xl p-4 sm:p-5 space-y-4">
             <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                {t("Formato del documento")}
-              </label>
-
-              <div className="grid grid-cols-3 gap-2 sm:gap-3">
-                {[
-                  {
-                    value: "docx",
-                    label: "Word",
-                    extension: ".docx",
-                  },
-                  {
-                    value: "pdf",
-                    label: "PDF",
-                    extension: ".pdf",
-                  },
-                  {
-                    value: "txt",
-                    label: t("Texto"),
-                    extension: ".txt",
-                  },
-                ].map((item) => (
-                  <button
-                    key={item.value}
-                    type="button"
-                    onClick={() =>
-                      setExportOptions({
-                        ...exportOptions,
-                        format: item.value as ExportOptions["format"],
-                      })
-                    }
-                    className={`p-2 sm:p-3 rounded-xl border text-sm font-semibold transition ${
-                      exportOptions.format === item.value
-                        ? "border-blue-600 bg-blue-50 text-blue-700"
-                        : "border-slate-200 text-slate-600 hover:bg-slate-50"
-                    }`}
-                  >
-                    {item.label}
-
-                    <span className="block text-xs font-normal mt-1">
-                      {item.extension}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                {t("Título")}
-              </label>
-
-              <input
-                type="text"
-                value={exportOptions.title}
-                onChange={(e) =>
-                  setExportOptions({
-                    ...exportOptions,
-                    title: e.target.value,
-                  })
-                }
-                style={{ colorScheme: "light" }}
-                className="w-full min-w-0 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
-                placeholder={t("Título del documento")}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                {t("Encabezado")}
-              </label>
-
-              <input
-                type="text"
-                value={exportOptions.header}
-                onChange={(e) =>
-                  setExportOptions({
-                    ...exportOptions,
-                    header: e.target.value,
-                  })
-                }
-                className="w-full min-w-0 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
-                placeholder={t("Ej. AudioNet")}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-semibold text-slate-700 mb-2">
-                {t("Subtítulo")}
-              </label>
-
-              <input
-                type="text"
-                value={exportOptions.subtitle}
-                onChange={(e) =>
-                  setExportOptions({
-                    ...exportOptions,
-                    subtitle: e.target.value,
-                  })
-                }
-                className="w-full min-w-0 bg-white text-slate-900 placeholder:text-slate-400 border border-slate-300 rounded-lg px-4 py-3 text-base outline-none shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition"
-                placeholder={t("Descripción adicional (opcional)")}
-              />
-            </div>
-
-            {/* OPCIONES ADICIONALES */}
-            <div className="border-t border-slate-100 pt-5 space-y-4">
-              <p className="text-sm font-semibold text-slate-700">
-                {t("Opciones adicionales")}
+              <h3 className="font-bold text-[#17233D]">
+                {t("Identificación judicial")}
+              </h3>
+              <p className="text-xs text-slate-500 mt-1">
+                {t(
+                  "Datos del expediente y de la audiencia. Completa únicamente la información disponible."
+                )}
               </p>
+            </div>
 
-              {[
-                {
-                  key: "include_date",
-                  label: "Incluir fecha y hora",
-                },
-                {
-                  key: "include_audio_info",
-                  label: "Incluir nombre del archivo de audio",
-                },
-                {
-                  key: "include_timestamps",
-                  label: "Incluir marcas de tiempo",
-                },
-              ].map((option) => (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {judicialFields.map((field) => (
+                <div key={field.key}>
+                  <label className="block text-xs font-semibold text-slate-600 mb-1">
+                    {t(field.label)}
+                  </label>
+
+                  <input
+                    type="text"
+                    value={exportOptions[field.key] as string}
+                    onChange={(e) =>
+                      setExportOptions((current) => ({
+                        ...current,
+                        [field.key]: e.target.value,
+                      }))
+                    }
+                    className="w-full min-w-0 bg-white text-slate-900 border border-slate-300 rounded-lg px-3 py-2.5 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* PARTICIPANTES */}
+            <div>
+              <label className="block text-sm font-semibold text-slate-700 mb-2">
+                {t("Participantes")}
+              </label>
+
+              <textarea
+                value={exportOptions.participants.join("\n")}
+                onChange={(e) =>
+                  setExportOptions((current) => ({
+                    ...current,
+                    participants: e.target.value
+                      .split("\n")
+                      .map((person) => person.trim())
+                      .filter(Boolean),
+                  }))
+                }
+                rows={4}
+                placeholder={t(
+                  "Un participante por línea. Ejemplo: Juez, Fiscal, Abogado, Testigo..."
+                )}
+                className="w-full bg-white text-slate-900 border border-slate-300 rounded-lg px-3 py-3 text-sm outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 resize-y"
+              />
+
+              <p className="text-xs text-slate-500 mt-1">
+                {t("Escribe únicamente los participantes que puedas identificar.")}
+              </p>
+            </div>
+
+            {/* OPCIONES JUDICIALES */}
+            <div className="border-t border-blue-100 pt-4 space-y-3">
+              {judicialCheckboxes.map((option) => (
                 <label
                   key={option.key}
-                  className="flex items-center gap-3 cursor-pointer min-h-8"
+                  className="flex items-center gap-3 cursor-pointer"
                 >
                   <input
                     type="checkbox"
-                    checked={
-                      exportOptions[
-                        option.key as keyof ExportOptions
-                      ] as boolean
-                    }
+                    checked={exportOptions[option.key]}
                     onChange={(e) =>
-                      setExportOptions({
-                        ...exportOptions,
+                      setExportOptions((current) => ({
+                        ...current,
                         [option.key]: e.target.checked,
-                      })
+                      }))
                     }
-                    className="w-5 h-5 shrink-0 accent-blue-600"
+                    className="w-5 h-5 accent-blue-600"
                   />
-
-                  <span className="text-sm text-slate-600">
+                  <span className="text-sm text-slate-700">
                     {t(option.label)}
                   </span>
                 </label>
               ))}
             </div>
           </div>
+        )}
 
-          {/* BOTONES DEL MODAL */}
-          <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3 shrink-0">
-            <button
-              onClick={() => setShowExport(false)}
-              disabled={exporting}
-              className="w-full sm:w-auto px-5 py-3 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-white disabled:opacity-50"
-            >
-              {t("Cancelar")}
-            </button>
+        {/* OPCIONES ADICIONALES */}
+        <div className="border-t border-slate-100 pt-5 space-y-4">
+          <p className="text-sm font-semibold text-slate-700">
+            {t("Opciones adicionales")}
+          </p>
 
-            <button
-              onClick={exportTranscription}
-              disabled={exporting}
-              className="w-full sm:w-auto px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold disabled:opacity-50"
+          {[
+            { key: "include_page_numbers", label: "Numerar páginas" },
+            { key: "include_date", label: "Incluir fecha y hora" },
+            {
+              key: "include_audio_info",
+              label: "Incluir nombre del archivo de audio",
+            },
+            {
+              key: "include_timestamps",
+              label: "Incluir marcas de tiempo",
+            },
+          ].map((option) => (
+            <label
+              key={option.key}
+              className="flex items-center gap-3 cursor-pointer min-h-8"
             >
-              {exporting
-                ? t("Generando documento...")
-                : t("Descargar documento")}
-            </button>
-          </div>
+              <input
+                type="checkbox"
+                checked={
+                  exportOptions[
+                    option.key as keyof ExportOptions
+                  ] as boolean
+                }
+                onChange={(e) =>
+                  setExportOptions((current) => ({
+                    ...current,
+                    [option.key]: e.target.checked,
+                  }))
+                }
+                className="w-5 h-5 shrink-0 accent-blue-600"
+              />
+
+              <span className="text-sm text-slate-600">
+                {t(option.label)}
+              </span>
+            </label>
+          ))}
         </div>
       </div>
-    )}
+
+      {/* BOTONES */}
+      <div className="p-4 sm:p-6 bg-slate-50 border-t border-slate-200 flex flex-col-reverse sm:flex-row justify-end gap-3 shrink-0">
+        <button
+          type="button"
+          onClick={() => setShowExport(false)}
+          disabled={exporting}
+          className="w-full sm:w-auto px-5 py-3 rounded-xl border border-slate-300 text-slate-700 font-semibold hover:bg-white disabled:opacity-50"
+        >
+          {t("Cancelar")}
+        </button>
+
+        <button
+          type="button"
+          onClick={exportTranscription}
+          disabled={exporting}
+          className="w-full sm:w-auto px-5 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold disabled:opacity-50"
+        >
+          {exporting
+            ? t("Generando documento...")
+            : t("Descargar documento")}
+        </button>
+      </div>
+    </div>
+  </div>
+)}
 
     {/* TEXTO TRANSCRITO */}
     <section className="bg-white border border-slate-200 rounded-2xl shadow-sm overflow-hidden">

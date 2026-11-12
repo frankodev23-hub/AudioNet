@@ -461,14 +461,41 @@ class TranscriptionUpdate(BaseModel):
     transcript_text: str
 
 
+from pydantic import BaseModel, Field
+
 class ExportOptions(BaseModel):
     format: str
-    title: str = "Transcripcion"
+    document_type: str = "standard"
+
+    title: str = "Transcripción"
     header: str = ""
     subtitle: str = ""
+    author: str = ""
+
     include_date: bool = True
     include_audio_info: bool = True
     include_timestamps: bool = False
+    include_page_numbers: bool = True
+
+    # Información judicial
+    country: str = ""
+    jurisdiction: str = ""
+    court: str = ""
+    case_number: str = ""
+    proceeding_type: str = ""
+    parties: str = ""
+    judge: str = ""
+    prosecutor: str = ""
+    attorneys: str = ""
+    clerk: str = ""
+    hearing_date: str = ""
+    hearing_location: str = ""
+    hearing_number: str = ""
+    transcriber: str = ""
+
+    participants: list[str] = Field(default_factory=list)
+    include_line_numbers: bool = False
+    include_participant_index: bool = False
 
 
 @app.patch("/transcriptions/{transcription_id}")
