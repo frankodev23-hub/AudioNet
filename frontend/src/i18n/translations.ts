@@ -18,6 +18,193 @@ export const translations: Record<Locale, Record<string, string>> = {
     "Facturación": "Facturación",
     "Configuración": "Configuración",
     "Ayuda y soporte": "Ayuda y soporte",
+
+    // ==========================================
+    // GENERAL
+    // ==========================================
+
+    "Cargando...": "Cargando...",
+    "Cargando transcripciones...": "Cargando transcripciones...",
+    "Cargando transcripción...": "Cargando transcripción...",
+    "Error de conexión": "Error de conexión",
+    "Error de conexión con el servidor.": "Error de conexión con el servidor.",
+    "Cancelar": "Cancelar",
+    "Guardar": "Guardar",
+    "Guardar cambios": "Guardar cambios",
+    "Guardando...": "Guardando...",
+    "Eliminar": "Eliminar",
+    "Descargar": "Descargar",
+    "Actualizar": "Actualizar",
+    "Reintentar": "Reintentar",
+    "Volver": "Volver",
+    "Usuario": "Usuario",
+    "Archivo": "Archivo",
+    "Idioma": "Idioma",
+    "Duración": "Duración",
+    "Fecha": "Fecha",
+    "Estado": "Estado",
+    "Acciones": "Acciones",
+    "Error": "Error",
+    "Completado": "Completado",
+    "Procesando": "Procesando",
+    "m": "m",
+    "s": "s",
+    "min": "min",
+
+    // ==========================================
+    // INICIO DE SESIÓN
+    // ==========================================
+
+    "Inteligencia artificial para audio": "Inteligencia artificial para audio",
+    "Tus audios.": "Tus audios.",
+    "Tus palabras.": "Tus palabras.",
+    "En texto.": "En texto.",
+    "Bienvenido": "Bienvenido",
+    "Iniciar sesión": "Iniciar sesión",
+    "Correo electrónico": "Correo electrónico",
+    "Contraseña": "Contraseña",
+    "Mostrar": "Mostrar",
+    "Ocultar": "Ocultar",
+    "¿Olvidaste tu contraseña?": "¿Olvidaste tu contraseña?",
+    "¿No tienes una cuenta?": "¿No tienes una cuenta?",
+    "Regístrate": "Regístrate",
+    "Ingresando...": "Ingresando...",
+    "Iniciar sesión con tu cuenta": "Iniciar sesión con tu cuenta",
+    "Correo electrónico o contraseña incorrectos.": "Correo electrónico o contraseña incorrectos.",
+    "Tu cuenta aún no ha sido verificada.": "Tu cuenta aún no ha sido verificada.",
+    "Debes verificar tu correo electrónico antes de iniciar sesión.": "Debes verificar tu correo electrónico antes de iniciar sesión.",
+    "No se pudo iniciar sesión.": "No se pudo iniciar sesión.",
+    "Credenciales incorrectas.": "Credenciales incorrectas.",
+
+    // ==========================================
+    // REGISTRO
+    // ==========================================
+
+    "Comienza a": "Comienza a",
+    "transformar": "transformar",
+    "tus audios.": "tus audios.",
+    "Crea tu cuenta y descubre una forma más sencilla de convertir tus grabaciones en texto.": "Crea tu cuenta y descubre una forma más sencilla de convertir tus grabaciones en texto.",
+    "Crear cuenta": "Crear cuenta",
+    "Crear mi cuenta": "Crear mi cuenta",
+    "Creando cuenta...": "Creando cuenta...",
+    "Tu nombre completo": "Tu nombre completo",
+    "Nombre completo": "Nombre completo",
+    "Confirmar contraseña": "Confirmar contraseña",
+    "¿Ya tienes una cuenta?": "¿Ya tienes una cuenta?",
+    "Las contraseñas no coinciden.": "Las contraseñas no coinciden.",
+    "La contraseña debe tener al menos 8 caracteres.": "La contraseña debe tener al menos 8 caracteres.",
+    "No se pudo crear la cuenta.": "No se pudo crear la cuenta.",
+    "Cuenta creada correctamente.": "Cuenta creada correctamente.",
+    "Revisa tu correo electrónico para verificar tu cuenta.": "Revisa tu correo electrónico para verificar tu cuenta.",
+    "Verifica tu correo electrónico": "Verifica tu correo electrónico",
+    "Volver al inicio de sesión": "Volver al inicio de sesión",
+
+    // ==========================================
+    // DASHBOARD
+    // ==========================================
+
+    "Mi cuenta": "Mi cuenta",
+    "Cerrar sesión": "Cerrar sesión",
+    "Panel de control": "Panel de control",
+    "Administra tus audios y transcripciones desde un solo lugar.": "Administra tus audios y transcripciones desde un solo lugar.",
+    "Consumo total": "Consumo total",
+    "Desde la creación de tu cuenta": "Desde la creación de tu cuenta",
+    "Consumo este mes": "Consumo este mes",
+    "Minutos procesados durante este mes": "Minutos procesados durante este mes",
+    "Audios contabilizados": "Audios contabilizados",
+    "Transcripciones procesadas correctamente": "Transcripciones procesadas correctamente",
+    "Nueva transcripción": "Nueva transcripción",
+    "Selecciona un archivo de audio para convertirlo en texto.": "Selecciona un archivo de audio para convertirlo en texto.",
+    "Español": "Español",
+    "Inglés": "Inglés",
+    "Portugués": "Portugués",
+    "Francés": "Francés",
+    "Alemán": "Alemán",
+    "Italiano": "Italiano",
+    "Automático": "Automático",
+    "Procesando audio...": "Procesando audio...",
+    "Transcribir audio": "Transcribir audio",
+    "Procesando tu archivo...": "Procesando tu archivo...",
+    "Esto puede tardar varios minutos.": "Esto puede tardar varios minutos.",
+    "Historial de transcripciones": "Historial de transcripciones",
+    "Consulta y administra tus archivos.": "Consulta y administra tus archivos.",
+    "Todavía no tienes transcripciones.": "Todavía no tienes transcripciones.",
+    "Sube tu primer audio para comenzar.": "Sube tu primer audio para comenzar.",
+    "Ver reporte de procesamiento →": "Ver reporte de procesamiento →",
+    "Ver reporte": "Ver reporte",
+    "Idioma de transcripción": "Idioma de transcripción",
+    "¿Estás seguro de eliminar esta transcripción?": "¿Estás seguro de eliminar esta transcripción?",
+    "Sesión no válida": "Sesión no válida",
+    "Algunos datos no pudieron cargarse. Puedes intentarlo nuevamente.": "Algunos datos no pudieron cargarse. Puedes intentarlo nuevamente.",
+    "Selecciona un archivo de audio.": "Selecciona un archivo de audio.",
+    "No se recibió el enlace de descarga.": "No se recibió el enlace de descarga.",
+    "Todos los derechos reservados.": "Todos los derechos reservados.",
+
+    // ==========================================
+    // TRANSCRIPCIÓN
+    // ==========================================
+
+    "Transcripción": "Transcripción",
+    "TRANSCRIPCIÓN": "TRANSCRIPCIÓN",
+    "No se pudo cargar la transcripción": "No se pudo cargar la transcripción",
+    "No se pudo guardar la transcripción": "No se pudo guardar la transcripción",
+    "Error al guardar la transcripción": "Error al guardar la transcripción",
+    "No se pudo descargar el audio": "No se pudo descargar el audio",
+    "Error de descarga": "Error de descarga",
+    "No se pudo exportar la transcripción": "No se pudo exportar la transcripción",
+    "Error al exportar el documento": "Error al exportar el documento",
+    "Transcripción no encontrada": "Transcripción no encontrada",
+    "Volver al dashboard": "Volver al panel de control",
+    "Descargar audio": "Descargar audio",
+    "Exportar documento": "Exportar documento",
+    "Texto transcrito": "Texto transcrito",
+    "Puedes editar y corregir el contenido.": "Puedes editar y corregir el contenido.",
+    "Editar texto": "Editar texto",
+    "Escribe o corrige la transcripción...": "Escribe o corrige la transcripción...",
+    "No hay texto disponible.": "No hay texto disponible.",
+    "Segmentos originales": "Segmentos originales",
+    "Texto original dividido por marcas de tiempo.": "Texto original dividido por marcas de tiempo.",
+
+    // ==========================================
+    // REPORTE DE PROCESAMIENTO
+    // ==========================================
+
+    "Reporte de procesamiento": "Reporte de procesamiento",
+    "Métricas calculadas sobre el texto original generado por Whisper.": "Métricas calculadas sobre el texto original generado por Whisper.",
+    "Tiempo de procesamiento": "Tiempo de procesamiento",
+    "Duración del audio": "Duración del audio",
+    "Palabras": "Palabras",
+    "Caracteres (con espacios)": "Caracteres (con espacios)",
+    "Caracteres (sin espacios)": "Caracteres (sin espacios)",
+    "Párrafos": "Párrafos",
+    "Segmentos": "Segmentos",
+    "Velocidad": "Velocidad",
+    "tiempo real": "tiempo real",
+    "Finalizado": "Finalizado",
+    "El reporte conserva las cifras originales aunque edites posteriormente la transcripción.": "El reporte conserva las cifras originales aunque edites posteriormente la transcripción.",
+
+    // ==========================================
+    // EXPORTACIÓN
+    // ==========================================
+
+    "Exportar transcripción": "Exportar transcripción",
+    "Personaliza tu documento.": "Personaliza tu documento.",
+    "Formato del documento": "Formato del documento",
+    "Word": "Word",
+    "PDF": "PDF",
+    "Texto": "Texto",
+    "Título": "Título",
+    "Título del documento": "Título del documento",
+    "Encabezado": "Encabezado",
+    "Ej. AudioNet": "Ej. AudioNet",
+    "Subtítulo": "Subtítulo",
+    "Descripción adicional (opcional)": "Descripción adicional (opcional)",
+    "Opciones adicionales": "Opciones adicionales",
+    "Incluir fecha y hora": "Incluir fecha y hora",
+    "Incluir nombre del archivo de audio": "Incluir nombre del archivo de audio",
+    "Incluir marcas de tiempo": "Incluir marcas de tiempo",
+    "Generando documento...": "Generando documento...",
+    "Descargar documento": "Descargar documento",
   },
 
   en: {

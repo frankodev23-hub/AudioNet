@@ -33,6 +33,16 @@ interface Transcription {
   segments: Segment[];
 }
 
+interface TranscriptionVersion {
+  id: string;
+  transcription_id: string;
+  user_id: string;
+  version_number: number;
+  transcript_text: string;
+  change_type: string;
+  created_at: string;
+}
+
 interface ExportOptions {
   format: "docx" | "pdf" | "txt";
   document_type:
@@ -129,6 +139,18 @@ function TranscriptionContent() {
   const [editedText, setEditedText] = useState("");
   const [saving, setSaving] = useState(false);
 
+  const [versions, setVersions] = useState<TranscriptionVersion[]>([]);
+  const [loadingVersions, setLoadingVersions] = useState(false);
+  const [selectedVersion, setSelectedVersion] =
+    useState<TranscriptionVersion | null>(null);
+  const [compareVersionId, setCompareVersionId] = useState("");
+  const [comparison, setComparison] = useState<{
+    version_a: TranscriptionVersion;
+    version_b: TranscriptionVersion;
+  } | null>(null);
+  const [restoringVersion, setRestoringVersion] = useState(false);
+  const [showVersionContent, setShowVersionContent] = useState(false);
+
   const [showExport, setShowExport] = useState(false);
   const [exporting, setExporting] = useState(false);
 
@@ -184,6 +206,53 @@ function TranscriptionContent() {
     });
   }, [locale, t]);
 
+  async function loadVersions() {
+    const token = localStorage.getItem("audionet_access_token");
+
+    if (!token) {
+      window.location.href = "/";
+      return;
+    }
+
+    setLoadingVersions(true);
+
+    try {
+      const response = await fetch(
+        `${API_URL}/transcriptions/${id}/versions`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        localStorage.removeItem("audionet_access_token");
+        localStorage.removeItem("audionet_refresh_token");
+        window.location.href = "/";
+        return;
+      }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          typeof result.detail === "string"
+            ? result.detail
+            : t("No se pudo cargar el historial")
+        );
+      }
+
+      setVersions(Array.isArray(result.versions) ? result.versions : []);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Error al cargar versiones")
+      );
+    } finally {
+      setLoadingVersions(false);
+    }
+  }
+
   useEffect(() => {
     async function loadTranscription() {
       const token = localStorage.getItem("audionet_access_token");
@@ -219,6 +288,7 @@ function TranscriptionContent() {
 
         setData(result);
         setEditedText(result.transcript_text || "");
+        await loadVersions();
       } catch (err) {
         setError(
           err instanceof Error ? err.message : t("Error de conexión")
@@ -229,6 +299,8 @@ function TranscriptionContent() {
     }
 
     loadTranscription();
+    // loadVersions is intentionally called after the transcription is loaded.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id, API_URL, t]);
 
   async function saveTranscription() {
@@ -268,12 +340,17 @@ function TranscriptionContent() {
         current
           ? {
               ...current,
-              transcript_text: editedText,
+              transcript_text:
+                result.transcription?.transcript_text ?? editedText,
             }
           : current
       );
 
+      setEditedText(
+        result.transcription?.transcript_text ?? editedText
+      );
       setEditing(false);
+      await loadVersions();
     } catch (err) {
       setError(
         err instanceof Error
@@ -282,6 +359,185 @@ function TranscriptionContent() {
       );
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function viewVersion(versionId: string) {
+    const token = localStorage.getItem("audionet_access_token");
+
+    if (!token) {
+      window.location.href = "/";
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/transcriptions/${id}/versions/${versionId}`,
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
+
+      if (response.status === 401) {
+        localStorage.removeItem("audionet_access_token");
+        localStorage.removeItem("audionet_refresh_token");
+        window.location.href = "/";
+        return;
+      }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          typeof result.detail === "string"
+            ? result.detail
+            : t("No se pudo consultar la versión")
+        );
+      }
+
+      setSelectedVersion(result);
+      setShowVersionContent(true);
+      setComparison(null);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Error al consultar versión")
+      );
+    }
+  }
+
+  async function compareVersions() {
+    if (!compareVersionId || versions.length < 2) return;
+
+    const token = localStorage.getItem("audionet_access_token");
+
+    if (!token) {
+      window.location.href = "/";
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/transcriptions/${id}/versions/compare`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            version_a_id: compareVersionId,
+            version_b_id: versions[0].id,
+          }),
+        }
+      );
+
+      if (response.status === 401) {
+        localStorage.removeItem("audionet_access_token");
+        localStorage.removeItem("audionet_refresh_token");
+        window.location.href = "/";
+        return;
+      }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          typeof result.detail === "string"
+            ? result.detail
+            : t("No se pudieron comparar las versiones")
+        );
+      }
+
+      setComparison(result);
+      setShowVersionContent(false);
+      setSelectedVersion(null);
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Error al comparar versiones")
+      );
+    }
+  }
+
+  async function restoreVersion(versionId: string) {
+    const confirmed = window.confirm(
+      t(
+        "¿Restaurar esta versión? El texto actual se conservará en el historial."
+      )
+    );
+
+    if (!confirmed) return;
+
+    const token = localStorage.getItem("audionet_access_token");
+
+    if (!token) {
+      window.location.href = "/";
+      return;
+    }
+
+    setRestoringVersion(true);
+    setError("");
+
+    try {
+      const response = await fetch(
+        `${API_URL}/transcriptions/${id}/versions/restore`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            version_id: versionId,
+          }),
+        }
+      );
+
+      if (response.status === 401) {
+        localStorage.removeItem("audionet_access_token");
+        localStorage.removeItem("audionet_refresh_token");
+        window.location.href = "/";
+        return;
+      }
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          typeof result.detail === "string"
+            ? result.detail
+            : t("No se pudo restaurar la versión")
+        );
+      }
+
+      const restoredText =
+        result.transcription?.transcript_text ??
+        result.transcription?.text ??
+        "";
+
+      setData((current) =>
+        current
+          ? {
+              ...current,
+              transcript_text: restoredText,
+            }
+          : current
+      );
+
+      setEditedText(restoredText);
+      setEditing(false);
+      setSelectedVersion(null);
+      setComparison(null);
+      setShowVersionContent(false);
+
+      await loadVersions();
+    } catch (err) {
+      setError(
+        err instanceof Error ? err.message : t("Error al restaurar versión")
+      );
+    } finally {
+      setRestoringVersion(false);
     }
   }
 
@@ -771,6 +1027,135 @@ function TranscriptionContent() {
           </section>
         )}
 
+        {/* HISTORIAL DE VERSIONES */}
+        <section className="mb-6 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h2 className="text-base font-bold text-[#17233D]">
+                {t("Historial de versiones")}
+              </h2>
+              <p className="mt-1 text-xs text-slate-400">
+                {t("Consulta, compara y restaura versiones anteriores.")}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={loadVersions}
+              disabled={loadingVersions}
+              className={`${buttonClass} border border-slate-200 bg-white text-slate-700 hover:bg-slate-50`}
+            >
+              {loadingVersions
+                ? t("Cargando...")
+                : t("Actualizar historial")}
+            </button>
+          </div>
+
+          <div className="p-4 sm:p-5">
+            {loadingVersions && versions.length === 0 ? (
+              <p className="py-5 text-center text-sm text-slate-400">
+                {t("Cargando historial...")}
+              </p>
+            ) : versions.length === 0 ? (
+              <p className="py-5 text-center text-sm text-slate-400">
+                {t("Todavía no hay versiones guardadas.")}
+              </p>
+            ) : (
+              <>
+                {versions.length > 1 && (
+                  <div className="mb-4 flex flex-col gap-2 sm:flex-row">
+                    <select
+                      value={compareVersionId}
+                      onChange={(e) => setCompareVersionId(e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">
+                        {t("Seleccionar versión para comparar")}
+                      </option>
+
+                      {versions.slice(1).map((version) => (
+                        <option key={version.id} value={version.id}>
+                          {`V${version.version_number} · ${formatDateTime(
+                            version.created_at
+                          )}`}
+                        </option>
+                      ))}
+                    </select>
+
+                    <button
+                      type="button"
+                      onClick={compareVersions}
+                      disabled={!compareVersionId}
+                      className={`${buttonClass} bg-indigo-600 text-white hover:bg-indigo-700`}
+                    >
+                      {t("Comparar")}
+                    </button>
+                  </div>
+                )}
+
+                <div className="space-y-2">
+                  {versions.map((version, index) => (
+                    <div
+                      key={version.id}
+                      className="flex flex-col gap-3 rounded-lg border border-slate-200 p-3 sm:flex-row sm:items-center sm:justify-between"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-md bg-blue-50 px-2 py-1 text-xs font-bold text-blue-700">
+                            V{version.version_number}
+                          </span>
+
+                          {index === 0 && (
+                            <span className="rounded-md bg-green-50 px-2 py-1 text-xs font-semibold text-green-700">
+                              {t("Última versión guardada")}
+                            </span>
+                          )}
+
+                          <span className="text-xs text-slate-400">
+                            {version.change_type}
+                          </span>
+                        </div>
+
+                        <p className="mt-1.5 text-xs text-slate-500">
+                          {formatDateTime(version.created_at)}
+                        </p>
+
+                        <p className="mt-1 text-xs text-slate-400">
+                          {formatNumber(
+                            version.transcript_text?.length || 0
+                          )}{" "}
+                          {t("caracteres")}
+                        </p>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 sm:flex">
+                        <button
+                          type="button"
+                          onClick={() => viewVersion(version.id)}
+                          className={`${buttonClass} border border-slate-200 text-slate-700 hover:bg-slate-50`}
+                        >
+                          {t("Ver")}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => restoreVersion(version.id)}
+                          disabled={restoringVersion || editing}
+                          className={`${buttonClass} bg-amber-500 text-white hover:bg-amber-600`}
+                        >
+                          {restoringVersion
+                            ? t("Restaurando...")
+                            : t("Restaurar")}
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+        </section>
+
         {/* TEXTO TRANSCRITO */}
         <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
           <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-4 sm:flex-row sm:items-center sm:justify-between">
@@ -814,9 +1199,7 @@ function TranscriptionContent() {
                   disabled={saving}
                   className={`${buttonClass} bg-green-600 text-white hover:bg-green-700`}
                 >
-                  {saving
-                    ? t("Guardando...")
-                    : t("Guardar cambios")}
+                  {saving ? t("Guardando...") : t("Guardar cambios")}
                 </button>
               </div>
             )}
@@ -843,6 +1226,83 @@ function TranscriptionContent() {
           AudioNet · {t("Transcripción")} {data.id}
         </div>
       </div>
+
+      {/* MODAL DE VERSIONES */}
+      {(showVersionContent || comparison) && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-slate-900/50 p-3 backdrop-blur-[2px] sm:p-5">
+          <div className="flex max-h-[90dvh] w-full max-w-5xl flex-col overflow-hidden rounded-2xl bg-white shadow-2xl">
+            <div className="flex items-center justify-between border-b border-slate-200 px-4 py-4 sm:px-6">
+              <h2 className="text-lg font-bold text-[#17233D]">
+                {comparison
+                  ? t("Comparación de versiones")
+                  : `${t("Versión")} ${
+                      selectedVersion?.version_number ?? ""
+                    }`}
+              </h2>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowVersionContent(false);
+                  setSelectedVersion(null);
+                  setComparison(null);
+                }}
+                aria-label={t("Cerrar")}
+                className="flex h-9 w-9 items-center justify-center rounded-lg text-2xl text-slate-400 hover:bg-slate-100"
+              >
+                ×
+              </button>
+            </div>
+
+            <div className="min-h-0 overflow-y-auto p-4 sm:p-6">
+              {comparison ? (
+                <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                  {[comparison.version_a, comparison.version_b].map(
+                    (version) => (
+                      <div key={version.id} className="min-w-0">
+                        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+                          <h3 className="font-bold text-slate-700">
+                            V{version.version_number}
+                          </h3>
+
+                          <span className="text-xs text-slate-400">
+                            {formatDateTime(version.created_at)}
+                          </span>
+                        </div>
+
+                        <pre className="max-h-[55vh] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-700">
+                          {version.transcript_text}
+                        </pre>
+                      </div>
+                    )
+                  )}
+                </div>
+              ) : selectedVersion ? (
+                <>
+                  <div className="mb-3 text-xs text-slate-400">
+                    {formatDateTime(selectedVersion.created_at)}
+                  </div>
+
+                  <pre className="whitespace-pre-wrap break-words rounded-lg border border-slate-200 bg-slate-50 p-4 text-sm leading-7 text-slate-700">
+                    {selectedVersion.transcript_text}
+                  </pre>
+
+                  <button
+                    type="button"
+                    onClick={() => restoreVersion(selectedVersion.id)}
+                    disabled={restoringVersion || editing}
+                    className={`${buttonClass} mt-4 bg-amber-500 text-white hover:bg-amber-600`}
+                  >
+                    {restoringVersion
+                      ? t("Restaurando...")
+                      : t("Restaurar esta versión")}
+                  </button>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* MODAL DE EXPORTACIÓN */}
       {showExport && (
