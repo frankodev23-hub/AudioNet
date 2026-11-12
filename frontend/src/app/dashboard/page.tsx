@@ -1,6 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
+import { useLanguage } from "@/components/LanguageProvider";
 
 interface Transcription {
   id: string;
@@ -11,6 +13,8 @@ interface Transcription {
   transcript_text?: string;
   created_at?: string;
   completed_at?: string;
+  processing_time_seconds?: number;
+  word_count?: number;
 }
 
 interface User {
@@ -26,100 +30,175 @@ interface Usage {
 }
 
 export default function DashboardPage() {
+  const { t, locale } = useLanguage();
+
   const API_URL =
     process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
-    const [usage, setUsage] = useState<Usage | null>(null);
-
+  const [usage, setUsage] = useState<Usage | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [transcriptions, setTranscriptions] = useState<Transcription[]>([]);
+
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [language, setLanguage] = useState("es");
+
   const [error, setError] = useState("");
   const [message, setMessage] = useState("");
+  const [latestTranscriptionId, setLatestTranscriptionId] = useState("");
 
-  const token =
-    typeof window !== "undefined"
-      ? localStorage.getItem("audionet_access_token")
-      : null;
+  // --------------------------------------------------
+  // API REQUEST
+  // --------------------------------------------------
 
-  async function apiRequest(endpoint: string, options: RequestInit = {}) {
+  async function apiRequest(
+    endpoint: string,
+    options: RequestInit = {}
+  ): Promise<Response> {
+    const token = localStorage.getItem("audionet_access_token");
+
+    if (!token) {
+      window.location.href = "/";
+      throw new Error("Sesión no válida");
+    }
+
     const response = await fetch(`${API_URL}${endpoint}`, {
       ...options,
       headers: {
-        Authorization: `Bearer ${token}`,
         ...options.headers,
+        Authorization: `Bearer ${token}`,
       },
     });
 
     if (response.status === 401) {
       localStorage.removeItem("audionet_access_token");
       localStorage.removeItem("audionet_refresh_token");
+
       window.location.href = "/";
-      throw new Error("Sesion expirada");
+      throw new Error("Sesión expirada");
     }
 
     return response;
   }
 
-  async function loadDashboard() {
+  // --------------------------------------------------
+  // LOAD DASHBOARD
+  // --------------------------------------------------
+
+  const loadDashboard = useCallback(async () => {
     setLoading(true);
     setError("");
 
     try {
-        const [userResponse, historyResponse, usageResponse] =
-        await Promise.all([
-            apiRequest("/auth/me"),
-            apiRequest("/transcriptions?limit=100&offset=0"),
-            apiRequest("/usage/me"),
-        ]);
+      const results = await Promise.allSettled([
+        apiRequest("/auth/me"),
+        apiRequest("/transcriptions?limit=100&offset=0"),
+        apiRequest("/usage/me"),
+      ]);
 
-        if (
-        !userResponse.ok ||
-        !historyResponse.ok ||
-        !usageResponse.ok
-        ) {
-        throw new Error("No se pudieron cargar los datos");
+      const [userResult, historyResult, usageResult] = results;
+
+      let hasErrors = false;
+
+      // USER
+      if (userResult.status === "fulfilled" && userResult.value.ok) {
+        try {
+          const userData = await userResult.value.json();
+          setUser(userData);
+        } catch {
+          setUser(null);
+          hasErrors = true;
         }
+      } else {
+        setUser(null);
+        hasErrors = true;
+      }
 
-      const userData = await userResponse.json();
-      const historyData = await historyResponse.json();
-      const usageData = await usageResponse.json();
+      // TRANSCRIPTION HISTORY
+      if (
+        historyResult.status === "fulfilled" &&
+        historyResult.value.ok
+      ) {
+        try {
+          const historyData = await historyResult.value.json();
 
-      setUser(userData);
-      setTranscriptions(historyData.transcriptions || []);
-      setUsage(usageData);
+          setTranscriptions(
+            Array.isArray(historyData.transcriptions)
+              ? historyData.transcriptions
+              : []
+          );
+        } catch {
+          setTranscriptions([]);
+          hasErrors = true;
+        }
+      } else {
+        setTranscriptions([]);
+        hasErrors = true;
+      }
+
+      // USAGE
+      if (usageResult.status === "fulfilled" && usageResult.value.ok) {
+        try {
+          const usageData = await usageResult.value.json();
+          setUsage(usageData);
+        } catch {
+          setUsage(null);
+          hasErrors = true;
+        }
+      } else {
+        setUsage(null);
+        hasErrors = true;
+      }
+
+      if (hasErrors) {
+        setError(
+          "Algunos datos no pudieron cargarse. Puedes intentarlo nuevamente."
+        );
+      }
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Error de conexion"
+        err instanceof Error
+          ? err.message
+          : "Error de conexión con el servidor."
       );
     } finally {
       setLoading(false);
     }
-  }
+  }, [API_URL]);
+
+  // --------------------------------------------------
+  // INITIALIZATION
+  // --------------------------------------------------
 
   useEffect(() => {
-    if (!localStorage.getItem("audionet_access_token")) {
+    const token = localStorage.getItem("audionet_access_token");
+
+    if (!token) {
       window.location.href = "/";
       return;
     }
 
     loadDashboard();
-  }, []);
+  }, [loadDashboard]);
+
+  // --------------------------------------------------
+  // UPLOAD AND TRANSCRIBE
+  // --------------------------------------------------
 
   async function handleUpload(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
     if (!selectedFile) {
-      setError("Selecciona un archivo de audio");
+      setError("Selecciona un archivo de audio.");
       return;
     }
 
     setUploading(true);
     setError("");
     setMessage("");
+    setLatestTranscriptionId("");
 
     try {
       const formData = new FormData();
@@ -133,39 +212,53 @@ export default function DashboardPage() {
         }
       );
 
-      const data = await response.json();
+      const result = await response.json();
 
       if (!response.ok) {
         throw new Error(
-          typeof data.detail === "string"
-            ? data.detail
-            : "No se pudo procesar el audio"
+          typeof result.detail === "string"
+            ? result.detail
+            : "No se pudo procesar el audio."
         );
       }
 
-      setMessage("Audio transcrito correctamente.");
+      setMessage(
+        "Audio transcrito correctamente. El reporte está disponible."
+      );
+
+      setLatestTranscriptionId(result.id);
       setSelectedFile(null);
 
       const input = document.getElementById(
         "audio-file"
-      ) as HTMLInputElement;
+      ) as HTMLInputElement | null;
 
-      if (input) input.value = "";
+      if (input) {
+        input.value = "";
+      }
 
       await loadDashboard();
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Error al procesar el audio"
+        err instanceof Error
+          ? err.message
+          : "Error al procesar el audio."
       );
     } finally {
       setUploading(false);
     }
   }
 
+  // --------------------------------------------------
+  // DELETE TRANSCRIPTION
+  // --------------------------------------------------
+
   async function handleDelete(id: string) {
-    if (!confirm("¿Estas seguro de eliminar esta transcripcion?")) {
+    if (!window.confirm(t("¿Estás seguro de eliminar esta transcripción?"))) {
       return;
     }
+
+    setError("");
 
     try {
       const response = await apiRequest(`/transcriptions/${id}`, {
@@ -173,64 +266,103 @@ export default function DashboardPage() {
       });
 
       if (!response.ok) {
-        throw new Error("No se pudo eliminar la transcripcion");
+        throw new Error("No se pudo eliminar la transcripción.");
       }
 
       setTranscriptions((current) =>
         current.filter((item) => item.id !== id)
       );
 
-      setMessage("Transcripcion eliminada correctamente.");
+      if (latestTranscriptionId === id) {
+        setLatestTranscriptionId("");
+      }
+
+      setMessage("Transcripción eliminada correctamente.");
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Error al eliminar"
+        err instanceof Error
+          ? err.message
+          : "Error al eliminar la transcripción."
       );
     }
   }
 
+  // --------------------------------------------------
+  // DOWNLOAD TRANSCRIPTION
+  // --------------------------------------------------
+
   async function handleDownload(id: string) {
+    setError("");
+
     try {
       const response = await apiRequest(
         `/transcriptions/${id}/download`
       );
 
       if (!response.ok) {
-        throw new Error("No se pudo obtener el archivo");
+        throw new Error("No se pudo obtener el archivo.");
       }
 
-      const data = await response.json();
-      window.open(data.download_url, "_blank");
+      const result = await response.json();
+
+      if (result.download_url) {
+        window.open(result.download_url, "_blank", "noopener,noreferrer");
+      } else {
+        throw new Error("No se recibió el enlace de descarga.");
+      }
     } catch (err) {
       setError(
-        err instanceof Error ? err.message : "Error de descarga"
+        err instanceof Error
+          ? err.message
+          : "Error de descarga."
       );
     }
   }
 
+  // --------------------------------------------------
+  // LOGOUT
+  // --------------------------------------------------
+
   function handleLogout() {
     localStorage.removeItem("audionet_access_token");
     localStorage.removeItem("audionet_refresh_token");
+
     window.location.href = "/";
   }
 
+  // --------------------------------------------------
+  // FORMAT HELPERS
+  // --------------------------------------------------
+
   function formatDuration(seconds?: number) {
-    if (seconds === undefined || seconds === null) return "--";
+    if (seconds === undefined || seconds === null) {
+      return "--";
+    }
 
     const minutes = Math.floor(seconds / 60);
     const remainingSeconds = Math.floor(seconds % 60);
 
-    return `${minutes}m ${remainingSeconds}s`;
+    return `${minutes}${t("m")} ${remainingSeconds}${t("s")}`;
   }
 
   function formatDate(date?: string) {
-    if (!date) return "--";
+    if (!date) {
+      return "--";
+    }
 
-    return new Date(date).toLocaleDateString("es-ES", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+    return new Date(date).toLocaleDateString(
+      locale === "en" ? "en-US" : "es-ES",
+      {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
+      }
+    );
   }
+
+  // --------------------------------------------------
+  // STATISTICS
+  // --------------------------------------------------
 
   const completed = transcriptions.filter(
     (item) => item.status === "completed"
@@ -244,33 +376,32 @@ export default function DashboardPage() {
     (item) => item.status === "failed"
   ).length;
 
+  // --------------------------------------------------
+  // RENDER
+  // --------------------------------------------------
+
   return (
     <main className="min-h-screen bg-[#F5F7FB] text-[#17233D]">
-
       {/* HEADER */}
 
       <header className="bg-white border-b border-slate-200">
         <div className="max-w-7xl mx-auto px-6 py-5 flex justify-between items-center">
-
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-blue-600 flex items-center justify-center text-white font-bold text-xl">
               A
             </div>
 
-            <span className="text-2xl font-bold">
-              AudioNet
-            </span>
+            <span className="text-2xl font-bold">AudioNet</span>
           </div>
 
           <div className="flex items-center gap-5">
-
             <div className="hidden sm:block text-right">
               <p className="text-sm font-semibold">
-                {user?.email || "Cargando..."}
+                {loading ? t("Cargando...") : user?.email || t("Usuario")}
               </p>
 
               <p className="text-xs text-slate-400">
-                Mi cuenta
+                {t("Mi cuenta")}
               </p>
             </div>
 
@@ -278,45 +409,63 @@ export default function DashboardPage() {
               onClick={handleLogout}
               className="text-sm font-semibold text-slate-500 hover:text-red-600"
             >
-              Cerrar sesion
+              {t("Cerrar sesión")}
             </button>
-
           </div>
         </div>
       </header>
 
-      {/* CONTENT */}
+      {/* MAIN CONTENT */}
 
       <div className="max-w-7xl mx-auto px-6 py-10">
+        {/* TITLE */}
 
         <div className="mb-9">
           <h1 className="text-3xl font-bold">
-            Panel de control
+            {t("Panel de control")}
           </h1>
 
           <p className="text-slate-500 mt-2">
-            Administra tus audios y transcripciones desde un solo lugar.
+            {t("Administra tus audios y transcripciones desde un solo lugar.")}
           </p>
         </div>
 
-        {/* ALERTS */}
+        {/* ERROR */}
 
         {error && (
-          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm">
-            {error}
+          <div className="mb-6 p-4 rounded-xl bg-red-50 border border-red-200 text-red-700 text-sm flex justify-between items-center gap-4">
+            <span>{t(error)}</span>
+
+            <button
+              onClick={loadDashboard}
+              disabled={loading}
+              className="font-semibold underline whitespace-nowrap"
+            >
+              {t("Reintentar")}
+            </button>
           </div>
         )}
+
+        {/* SUCCESS MESSAGE */}
 
         {message && (
-          <div className="mb-6 p-4 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm">
-            {message}
+          <div className="mb-6 p-4 rounded-xl bg-green-50 border border-green-200 text-green-700 text-sm flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+            <span>{t(message)}</span>
+
+            {latestTranscriptionId && (
+              <Link
+                href={`/dashboard/${latestTranscriptionId}`}
+                className="font-semibold text-green-800 underline"
+              >
+                {t("Ver reporte de procesamiento →")}
+              </Link>
+            )}
           </div>
         )}
 
-        {/* STATISTICS */}
+        {/* TRANSCRIPTION STATISTICS */}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-10">
-
           {[
             {
               label: "Total de audios",
@@ -344,7 +493,7 @@ export default function DashboardPage() {
               className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm"
             >
               <p className="text-sm text-slate-500">
-                {stat.label}
+                {t(stat.label)}
               </p>
 
               <p className={`text-3xl font-bold mt-3 ${stat.color}`}>
@@ -352,70 +501,70 @@ export default function DashboardPage() {
               </p>
             </div>
           ))}
-
         </div>
 
         {/* USAGE STATISTICS */}
 
-<section className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
+        <section className="grid grid-cols-1 md:grid-cols-3 gap-5 mb-10">
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <p className="text-sm text-slate-500">
+              {t("Consumo total")}
+            </p>
 
-  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-    <p className="text-sm text-slate-500">
-      Consumo total
-    </p>
+            <p className="text-3xl font-bold text-blue-600 mt-3">
+              {loading
+                ? "..."
+                : `${Number(usage?.total_minutes || 0).toFixed(2)} ${t("min")}`}
+            </p>
 
-    <p className="text-3xl font-bold text-blue-600 mt-3">
-      {loading ? "..." : `${Number(usage?.total_minutes || 0).toFixed(2)} min`}
-    </p>
+            <p className="text-xs text-slate-400 mt-2">
+              {t("Desde la creación de tu cuenta")}
+            </p>
+          </div>
 
-    <p className="text-xs text-slate-400 mt-2">
-      Desde la creación de tu cuenta
-    </p>
-  </div>
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <p className="text-sm text-slate-500">
+              {t("Consumo este mes")}
+            </p>
 
-  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-    <p className="text-sm text-slate-500">
-      Consumo este mes
-    </p>
+            <p className="text-3xl font-bold text-indigo-600 mt-3">
+              {loading
+                ? "..."
+                : `${(
+                    Number(usage?.current_month_seconds || 0) / 60
+                  ).toFixed(2)} ${t("min")}`}
+            </p>
 
-    <p className="text-3xl font-bold text-indigo-600 mt-3">
-      {loading
-        ? "..."
-        : `${(Number(usage?.current_month_seconds || 0) / 60).toFixed(2)} min`}
-    </p>
+            <p className="text-xs text-slate-400 mt-2">
+              {t("Minutos procesados durante este mes")}
+            </p>
+          </div>
 
-    <p className="text-xs text-slate-400 mt-2">
-      Minutos procesados durante este mes
-    </p>
-  </div>
+          <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
+            <p className="text-sm text-slate-500">
+              {t("Audios contabilizados")}
+            </p>
 
-  <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm">
-    <p className="text-sm text-slate-500">
-      Audios contabilizados
-    </p>
+            <p className="text-3xl font-bold text-green-600 mt-3">
+              {loading ? "..." : usage?.transcription_count ?? 0}
+            </p>
 
-    <p className="text-3xl font-bold text-green-600 mt-3">
-      {loading ? "..." : usage?.transcription_count ?? 0}
-    </p>
+            <p className="text-xs text-slate-400 mt-2">
+              {t("Transcripciones procesadas correctamente")}
+            </p>
+          </div>
+        </section>
 
-    <p className="text-xs text-slate-400 mt-2">
-      Transcripciones procesadas correctamente
-    </p>
-  </div>
-
-</section>
-
-        {/* UPLOAD */}
+        {/* NEW TRANSCRIPTION */}
 
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-10">
-
           <div className="mb-6">
             <h2 className="text-xl font-bold">
-              Nueva transcripcion
+              {t("Nueva transcripción")}
             </h2>
 
             <p className="text-sm text-slate-500 mt-1">
-              Selecciona un archivo de audio para convertirlo en texto.
+              {t("Selecciona un archivo de audio para convertirlo en texto.")}
             </p>
           </div>
 
@@ -423,7 +572,6 @@ export default function DashboardPage() {
             onSubmit={handleUpload}
             className="flex flex-col lg:flex-row gap-4"
           >
-
             <div className="flex-1">
               <input
                 id="audio-file"
@@ -442,14 +590,15 @@ export default function DashboardPage() {
               onChange={(e) => setLanguage(e.target.value)}
               disabled={uploading}
               className="border border-slate-200 rounded-xl px-4 py-3 bg-white text-sm"
+              aria-label={t("Idioma de transcripción")}
             >
-              <option value="es">Español</option>
-              <option value="en">Ingles</option>
-              <option value="pt">Portugues</option>
-              <option value="fr">Frances</option>
-              <option value="de">Aleman</option>
-              <option value="it">Italiano</option>
-              <option value="auto">Automatico</option>
+              <option value="es">{t("Español")}</option>
+              <option value="en">{t("Inglés")}</option>
+              <option value="pt">{t("Portugués")}</option>
+              <option value="fr">{t("Francés")}</option>
+              <option value="de">{t("Alemán")}</option>
+              <option value="it">{t("Italiano")}</option>
+              <option value="auto">{t("Automático")}</option>
             </select>
 
             <button
@@ -457,16 +606,17 @@ export default function DashboardPage() {
               disabled={uploading || !selectedFile}
               className="px-8 py-3 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-semibold transition disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {uploading ? "Procesando audio..." : "Transcribir audio"}
+              {uploading
+                ? t("Procesando audio...")
+                : t("Transcribir audio")}
             </button>
-
           </form>
 
           {uploading && (
             <div className="mt-5">
               <div className="flex justify-between text-sm text-slate-500 mb-2">
-                <span>Procesando tu archivo...</span>
-                <span>Esto puede tardar varios minutos.</span>
+                <span>{t("Procesando tu archivo...")}</span>
+                <span>{t("Esto puede tardar varios minutos.")}</span>
               </div>
 
               <div className="h-2 bg-slate-100 rounded-full overflow-hidden">
@@ -474,22 +624,19 @@ export default function DashboardPage() {
               </div>
             </div>
           )}
-
         </section>
 
-        {/* HISTORY */}
+        {/* TRANSCRIPTION HISTORY */}
 
         <section className="bg-white rounded-2xl border border-slate-200 shadow-sm">
-
           <div className="p-6 border-b border-slate-100 flex justify-between items-center">
-
             <div>
               <h2 className="text-xl font-bold">
-                Historial de transcripciones
+                {t("Historial de transcripciones")}
               </h2>
 
               <p className="text-sm text-slate-500 mt-1">
-                Consulta y administra tus archivos.
+                {t("Consulta y administra tus archivos.")}
               </p>
             </div>
 
@@ -498,65 +645,53 @@ export default function DashboardPage() {
               disabled={loading}
               className="text-sm font-semibold text-blue-600 hover:text-blue-800 disabled:opacity-50"
             >
-              Actualizar
+              {loading ? t("Cargando...") : t("Actualizar")}
             </button>
-
           </div>
 
           {loading ? (
             <div className="p-12 text-center text-slate-400">
-              Cargando transcripciones...
+              {t("Cargando transcripciones...")}
             </div>
           ) : transcriptions.length === 0 ? (
             <div className="p-12 text-center">
               <p className="text-slate-400 text-lg">
-                Todavia no tienes transcripciones.
+                {t("Todavía no tienes transcripciones.")}
               </p>
 
               <p className="text-sm text-slate-400 mt-2">
-                Sube tu primer audio para comenzar.
+                {t("Sube tu primer audio para comenzar.")}
               </p>
             </div>
           ) : (
-
             <div className="overflow-x-auto">
-
               <table className="w-full text-sm">
-
                 <thead className="bg-slate-50 text-slate-500">
                   <tr>
                     <th className="text-left px-6 py-4 font-semibold">
-                      Archivo
+                      {t("Archivo")}
                     </th>
-
                     <th className="text-left px-6 py-4 font-semibold">
-                      Idioma
+                      {t("Idioma")}
                     </th>
-
                     <th className="text-left px-6 py-4 font-semibold">
-                      Duracion
+                      {t("Duración")}
                     </th>
-
                     <th className="text-left px-6 py-4 font-semibold">
-                      Fecha
+                      {t("Fecha")}
                     </th>
-
                     <th className="text-left px-6 py-4 font-semibold">
-                      Estado
+                      {t("Estado")}
                     </th>
-
                     <th className="text-right px-6 py-4 font-semibold">
-                      Acciones
+                      {t("Acciones")}
                     </th>
                   </tr>
                 </thead>
 
                 <tbody className="divide-y divide-slate-100">
-
                   {transcriptions.map((item) => (
-
                     <tr key={item.id} className="hover:bg-slate-50">
-
                       <td className="px-6 py-4 font-semibold text-slate-700">
                         {item.filename}
                       </td>
@@ -574,7 +709,6 @@ export default function DashboardPage() {
                       </td>
 
                       <td className="px-6 py-4">
-
                         <span
                           className={`px-3 py-1 rounded-full text-xs font-semibold ${
                             item.status === "completed"
@@ -585,30 +719,27 @@ export default function DashboardPage() {
                           }`}
                         >
                           {item.status === "completed"
-                            ? "Completado"
+                            ? t("Completado")
                             : item.status === "processing"
-                            ? "Procesando"
-                            : "Error"}
+                            ? t("Procesando")
+                            : t("Error")}
                         </span>
-
                       </td>
 
                       <td className="px-6 py-4 text-right whitespace-nowrap">
-                        <button
-  onClick={() =>
-    window.location.href = `/dashboard/${item.id}`
-  }
-  className="text-slate-700 hover:text-blue-600 font-semibold mr-4"
->
-  Ver
-</button>
+                        <Link
+                          href={`/dashboard/${item.id}`}
+                          className="text-slate-700 hover:text-blue-600 font-semibold mr-4"
+                        >
+                          {t("Ver reporte")}
+                        </Link>
 
                         {item.status === "completed" && (
                           <button
                             onClick={() => handleDownload(item.id)}
                             className="text-blue-600 hover:text-blue-800 font-semibold mr-4"
                           >
-                            Descargar
+                            {t("Descargar")}
                           </button>
                         )}
 
@@ -616,31 +747,23 @@ export default function DashboardPage() {
                           onClick={() => handleDelete(item.id)}
                           className="text-red-500 hover:text-red-700 font-semibold"
                         >
-                          Eliminar
+                          {t("Eliminar")}
                         </button>
-
                       </td>
-
                     </tr>
-
                   ))}
-
                 </tbody>
-
               </table>
-
             </div>
-
           )}
-
         </section>
 
+        {/* FOOTER */}
+
         <footer className="text-center text-xs text-slate-400 mt-10">
-          © 2026 AudioNet. Todos los derechos reservados.
+          © 2026 AudioNet. {t("Todos los derechos reservados.")}
         </footer>
-
       </div>
-
     </main>
   );
 }
