@@ -102,6 +102,8 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "http://localhost:3200",
+        "http://127.0.0.1:3200",
         "http://localhost:3000",
         "http://127.0.0.1:3000",
         "https://musical-flan-ee1cd7.netlify.app"
@@ -133,6 +135,151 @@ RUNPOD_BASE_URL = (
 
 security = HTTPBearer(auto_error=False)
 
+
+# =====================================================
+# RESTAURACIÓN DE PUNTUACIÓN Y MAYÚSCULAS
+# =====================================================
+
+import threading
+
+CAP_PUNCT_ENABLED = (
+    os.getenv("CAP_PUNCT_ENABLED", "true").lower() == "true"
+)
+
+CAP_PUNCT_MODEL = "HiTZ/cap-punct-es"
+
+_cap_punct_pipeline = None
+_cap_punct_lock = threading.Lock()
+
+
+def get_cap_punct_pipeline():
+    global _cap_punct_pipeline
+
+    if _cap_punct_pipeline is None:
+        with _cap_punct_lock:
+            if _cap_punct_pipeline is None:
+                from transformers import pipeline
+
+                print("Loading HiTZ Cap-Punct-ES model...")
+
+                _cap_punct_pipeline = pipeline(
+                    task="translation",
+                    model=CAP_PUNCT_MODEL,
+                    tokenizer=CAP_PUNCT_MODEL,
+                    device=-1
+                )
+
+                print("Cap-Punct-ES model loaded successfully.")
+
+    return _cap_punct_pipeline
+
+
+def split_text_for_punctuation(
+    text: str,
+    max_chars: int = 1000
+) -> list[str]:
+
+    if not text:
+        return []
+
+    sentences = re.split(
+        r'(?<=[.!?¿¡])\s+',
+        text.strip()
+    )
+
+    chunks = []
+    current = ""
+
+    for sentence in sentences:
+
+        sentence = sentence.strip()
+
+        if not sentence:
+            continue
+
+        if len(sentence) > max_chars:
+
+            if current:
+                chunks.append(current)
+                current = ""
+
+            words = sentence.split()
+            fragment = ""
+
+            for word in words:
+
+                candidate = (
+                    f"{fragment} {word}".strip()
+                )
+
+                if len(candidate) > max_chars and fragment:
+                    chunks.append(fragment)
+                    fragment = word
+                else:
+                    fragment = candidate
+
+            if fragment:
+                current = fragment
+
+            continue
+
+        candidate = (
+            f"{current} {sentence}".strip()
+        )
+
+        if len(candidate) > max_chars and current:
+            chunks.append(current)
+            current = sentence
+        else:
+            current = candidate
+
+    if current:
+        chunks.append(current)
+
+    return chunks
+
+
+def restore_punctuation(text: str) -> str:
+
+    if not text or not text.strip():
+        return text
+
+    if not CAP_PUNCT_ENABLED:
+        return text
+
+    try:
+
+        model = get_cap_punct_pipeline()
+
+        chunks = split_text_for_punctuation(text)
+
+        if not chunks:
+            return text
+
+        results = model(
+            chunks,
+            batch_size=4,
+            truncation=True
+        )
+
+        corrected_chunks = [
+            result.get("translation_text", "").strip()
+            for result in results
+        ]
+
+        if (
+            len(corrected_chunks) != len(chunks)
+            or any(not chunk for chunk in corrected_chunks)
+        ):
+            print("Cap-Punct warning: incomplete result. Keeping original text.")
+            return text
+
+        return " ".join(corrected_chunks)
+
+    except Exception as e:
+
+        print(f"Cap-Punct warning: {e}")
+        return text
 
 # =====================================================
 # MODELOS
@@ -581,7 +728,14 @@ async def upload_and_transcribe(
         )
 
         segments = output.get("segments", []) or []
-        transcript_text = output.get("text", "") or ""
+
+        original_text = output.get("text", "") or ""
+
+        transcript_text = await asyncio.to_thread(
+            restore_punctuation,
+            original_text
+)
+
         audio_duration = float(output.get("duration") or 0)
 
         clean_text = transcript_text.strip()
