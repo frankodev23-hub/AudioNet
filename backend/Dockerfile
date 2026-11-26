@@ -1,13 +1,18 @@
 ﻿FROM python:3.11-slim
 
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1
+
 WORKDIR /app
 
-COPY requirements.txt .
+COPY requirements.txt ./
+RUN python -m pip install --no-cache-dir -r requirements.txt \
+    && useradd --system --uid 10001 --no-create-home audionet
 
-RUN pip install --no-cache-dir --upgrade pip && pip install --no-cache-dir -r requirements.txt
+COPY main.py database.py storage.py exports.py ./
 
-COPY . .
+USER audionet
 
 EXPOSE 8000
 
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "-m", "uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000"]

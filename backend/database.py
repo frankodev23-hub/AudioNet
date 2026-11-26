@@ -130,6 +130,8 @@ def fail_transcription(
         })
         .eq("id", transcription_id)
         .eq("user_id", user_id)
+        .eq("status", "processing")
+        .eq("is_deleted", False)
         .execute()
     )
 
@@ -806,12 +808,7 @@ def duplicate_transcription(
     duplicate_data["is_deleted"] = False
     duplicate_data["deleted_at"] = None
 
-    if new_title:
-        duplicate_data["title"] = new_title
-    elif duplicate_data.get("title"):
-        duplicate_data["title"] = (
-            f"{duplicate_data['title']} (copia)"
-        )
+    duplicate_data["filename"] = (new_title or "").strip() or f"Copia de {original['filename']}"
 
     duplicate_data["folder_id"] = original.get("folder_id")
     duplicate_data["category_id"] = original.get("category_id")
@@ -1032,3 +1029,25 @@ def get_user_usage(user_id: str):
         }
 
     return response.data[0]
+
+def register_transcription_job(transcription_id, user_id, provider_job_id, storage_key):
+    return supabase.rpc("register_transcription_job", {
+        "p_transcription_id": transcription_id,
+        "p_user_id": user_id,
+        "p_provider_job_id": provider_job_id,
+        "p_storage_key": storage_key,
+    }).execute().data
+
+
+def claim_transcription_jobs():
+    return supabase.rpc("claim_transcription_jobs").execute().data
+
+
+def finish_transcription_job(job, result=None, segments=None, error=None):
+    return supabase.rpc("finish_transcription_job", {
+        "p_transcription_id": job["transcription_id"],
+        "p_claim_until": job["next_poll_at"],
+        "p_result": result,
+        "p_segments": [] if segments is None else segments,
+        "p_error": error,
+    }).execute().data

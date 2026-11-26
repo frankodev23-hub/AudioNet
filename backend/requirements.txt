@@ -7,7 +7,3 @@ python-dotenv
 supabase
 python-docx
 reportlab
-torch
-transformers>=4.40,<5
-sentencepiece
-sacremoses
