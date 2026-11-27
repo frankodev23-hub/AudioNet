@@ -82,6 +82,10 @@ export default function AppHeader() {
               <Link href="/dashboard#statistics" className={linkClass("/dashboard#statistics")}>
                 {t("Estadísticas")}
               </Link>
+
+              <Link href="/dashboard/account" className={linkClass("/dashboard/account")}>
+                {t("Mi cuenta")}
+              </Link>
             </>
           ) : (
             <>
@@ -156,6 +160,10 @@ export default function AppHeader() {
 
                 <Link href="/dashboard#statistics" className={linkClass("/dashboard#statistics")}>
                   {t("Estadísticas")}
+                </Link>
+
+                <Link href="/dashboard/account" className={linkClass("/dashboard/account")}>
+                  {t("Mi cuenta")}
                 </Link>
               </>
             ) : (
