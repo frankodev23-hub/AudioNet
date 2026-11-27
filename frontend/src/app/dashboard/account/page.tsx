@@ -21,6 +21,8 @@ type Wallet = {
   more_usage?: boolean;
 };
 
+const rechargesUnavailable = "Las recargas no están disponibles en este momento.";
+
 async function creditRequest(path: string, options: RequestInit = {}) {
   const accessToken = localStorage.getItem("audionet_access_token");
   if (!accessToken) {
@@ -36,6 +38,7 @@ async function creditRequest(path: string, options: RequestInit = {}) {
     window.location.replace("/");
     throw new Error("Sesión expirada");
   }
+  if (path === "/recharges" && response.status === 503) throw new Error(rechargesUnavailable);
   if (!response.ok) throw new Error("No se pudo acceder a tu cuenta de créditos.");
   return response.json();
 }
@@ -122,8 +125,10 @@ export default function AccountPage() {
       lastAttempt.current = null;
       setNotice("Recarga simulada acreditada.");
       await refresh();
-    } catch {
-      setError("No se pudo confirmar la recarga. Puedes volver a intentarlo.");
+    } catch (error) {
+      setError(error instanceof Error && error.message === rechargesUnavailable
+        ? rechargesUnavailable
+        : "No se pudo confirmar la recarga. Puedes volver a intentarlo.");
     } finally {
       setPending(undefined);
     }
@@ -211,7 +216,7 @@ export default function AccountPage() {
             </section>
             <section className="mt-7">
               <h2 className="text-lg font-bold">{t("Recargar créditos")}</h2>
-              <p className="mt-1 text-sm text-slate-600">{t(wallet.mode === "simulated" ? "Modo simulado. Las recargas no generan cargos." : wallet.mode === "stripe_test" ? "Stripe en modo de prueba. Usa una tarjeta de prueba." : "Paga con tarjeta en Stripe.")}</p>
+              <p className="mt-1 text-sm text-slate-600">{t(wallet.packs.length === 0 ? rechargesUnavailable : wallet.mode === "simulated" ? "Modo simulado. Las recargas no generan cargos." : wallet.mode === "stripe_test" ? "Stripe en modo de prueba. Usa una tarjeta de prueba." : "Paga con tarjeta en Stripe.")}</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {wallet.packs.map((pack) => (
                   <article key={pack.id} className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
