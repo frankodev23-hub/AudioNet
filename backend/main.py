@@ -43,6 +43,7 @@ from storage import (
 )
 
 from database import (
+    supabase,
     create_transcription,
     complete_transcription,
     fail_transcription,
@@ -336,6 +337,20 @@ async def get_current_user(
                     status_code=401,
                     detail="Invalid user session"
                 )
+
+            try:
+                blocked = await asyncio.to_thread(
+                    lambda: supabase.rpc(
+                        "an_customer_blocked", {"p_target": user["id"]}
+                    ).execute().data
+                )
+            except Exception as error:
+                raise HTTPException(
+                    status_code=503, detail="Account status temporarily unavailable"
+                ) from error
+
+            if blocked is not False:
+                raise HTTPException(status_code=403, detail="AudioNet account blocked")
 
             return user
 
