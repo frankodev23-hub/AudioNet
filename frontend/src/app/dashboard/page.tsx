@@ -95,6 +95,7 @@ export default function DashboardPage() {
   const [tags, setTags] = useState<Tag[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
+  const [needsCredits, setNeedsCredits] = useState(false);
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [language, setLanguage] = useState("es");
   const [error, setError] = useState("");
@@ -226,10 +227,15 @@ export default function DashboardPage() {
     setError("");
     setMessage("");
     setUploadReceipt(null);
+    setNeedsCredits(false);
     try {
       const formData = new FormData();
       formData.append("file", selectedFile);
       const response = await apiRequest(`/upload-and-transcribe?language=${language}&background=${backgroundTranscription}`, { method: "POST", body: formData });
+      if (response.status === 402) {
+        setNeedsCredits(true);
+        return;
+      }
       const result = await response.json();
       if (!response.ok) throw new Error(typeof result.detail === "string" ? result.detail : "No se pudo procesar el audio.");
       setUploadReceipt({ id: result.id, status: result.status });
@@ -433,6 +439,12 @@ export default function DashboardPage() {
             <button type="submit" disabled={uploading || !selectedFile} className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50 lg:w-auto">{uploading ? <><span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />{t(backgroundTranscription ? "Subiendo audio..." : "Procesando audio...")}</> : <><Icon name="audio" size={17} />{t("Transcribir audio")}</>}</button>
           </form>
           {uploading && <div className="mt-4"><div className="mb-2 flex flex-col gap-1 text-xs text-slate-500 sm:flex-row sm:justify-between"><span>{t(backgroundTranscription ? "Subiendo audio..." : "Procesando tu archivo...")}</span><span>{t(backgroundTranscription ? "Mantén esta página abierta hasta que termine la subida." : "Esto puede tardar varios minutos.")}</span></div><div className="h-1.5 overflow-hidden rounded-full bg-slate-100"><div className="h-full w-1/2 animate-pulse rounded-full bg-blue-600" /></div></div>}
+          {needsCredits && (
+            <p role="alert" className="mt-4 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
+              {t("No tienes saldo suficiente para este audio.")} {" "}
+              <Link href="/dashboard/account" className="font-semibold underline">{t("Ir a recargar")}</Link>
+            </p>
+          )}
           <div role="status">
             {uploadStatus === "processing" && (
               <p className="mt-4 rounded-lg bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-800">

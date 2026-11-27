@@ -8,6 +8,8 @@ import time
 
 import httpx
 
+import credits
+
 from pathlib import Path
 from contextlib import asynccontextmanager, suppress
 from datetime import datetime, timezone
@@ -123,7 +125,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="AudioNet API",
     description="Plataforma de transcripción de audio",
-    version="1.4.0",
+    version="1.5.0",
     lifespan=lifespan,
 )
 
@@ -447,6 +449,9 @@ async def register(data: RegisterRequest):
         )
 
 
+app.include_router(credits.build_credits_router(get_current_user))
+
+
 @app.get("/auth/me")
 async def get_me(
     current_user: dict = Depends(get_current_user)
@@ -555,6 +560,8 @@ async def execute_transcription(audio_url: str, language: str):
 # =====================================================
 
 def transcription_result(output, processing_time):
+    if not isinstance(output, dict) or output.get("error"):
+        raise ValueError("Transcription provider returned an error")
     segments = output.get("segments") or []
     transcript_text = output.get("text") or ""
     if not transcript_text.strip() and segments:
@@ -613,8 +620,12 @@ async def poll_transcription_job(client, job):
 
 
 async def poll_transcription_jobs(client):
+    next_cleanup = 0.0
     while True:
         try:
+            if credits.CREDITS_MODE != "disabled" and time.monotonic() >= next_cleanup:
+                next_cleanup = time.monotonic() + 300
+                await asyncio.to_thread(credits.expire_unsubmitted)
             jobs = await asyncio.to_thread(claim_transcription_jobs)
             await asyncio.gather(*(poll_transcription_job(client, job) for job in jobs))
         except Exception as error:
@@ -639,8 +650,12 @@ async def upload_and_transcribe(
 
     temp_path = None
     transcription_id = None
+    object_key = None
+    provider_submission_started = False
 
     try:
+        if credits.CREDITS_MODE != "disabled":
+            background = True
         if background and not ASYNC_JOBS_ENABLED:
             raise HTTPException(status_code=503, detail="Background transcription is disabled")
 
@@ -662,13 +677,21 @@ async def upload_and_transcribe(
         if audio_bytes == 0:
             raise HTTPException(status_code=400, detail="Audio file is empty")
 
-        transcription = await asyncio.to_thread(create_transcription, {
-            "user_id": user_id,
-            "filename": filename,
-            "language": language,
-            "status": "processing"
-        })
-        transcription_id = transcription["id"]
+        if credits.CREDITS_MODE != "disabled":
+            seconds = await asyncio.to_thread(credits.measure_audio_seconds, temp_path)
+            transcription_id = await asyncio.to_thread(
+                credits.reserve_transcription, user_id, filename, language, seconds,
+            )
+            if not transcription_id:
+                raise HTTPException(status_code=402, detail="Insufficient credit balance")
+        else:
+            transcription = await asyncio.to_thread(create_transcription, {
+                "user_id": user_id,
+                "filename": filename,
+                "language": language,
+                "status": "processing"
+            })
+            transcription_id = transcription["id"]
 
         object_key = await asyncio.to_thread(upload_audio, temp_path, filename)
 
@@ -680,6 +703,7 @@ async def upload_and_transcribe(
         try:
             if background:
                 async with httpx.AsyncClient(timeout=20) as client:
+                    provider_submission_started = True
                     job_id = await submit_runpod_job(client, audio_url, language)
             else:
                 output = await execute_transcription(audio_url, language)
@@ -751,7 +775,7 @@ async def upload_and_transcribe(
             "report": report
         }
 
-    except Exception as error:
+    except (Exception, asyncio.CancelledError) as error:
         if isinstance(error, HTTPException):
             public_error = error
         else:
@@ -775,7 +799,13 @@ async def upload_and_transcribe(
                     transcription_id, type(persistence_error).__name__,
                 )
 
-        if public_error is error:
+        if object_key and not provider_submission_started and background:
+            try:
+                await asyncio.to_thread(delete_audio, object_key)
+            except Exception:
+                logger.warning("Could not remove audio for failed upload %s", transcription_id)
+
+        if public_error is error or isinstance(error, asyncio.CancelledError):
             raise
         raise public_error from None
 
@@ -1928,6 +1958,9 @@ def remove_transcription(
                 status_code=404,
                 detail="Transcription not found"
             )
+
+        if transcription["status"] == "processing" and credits.CREDITS_MODE != "disabled":
+            raise HTTPException(status_code=409, detail="Wait for transcription to finish before deleting it")
 
         result = delete_transcription(
             transcription_id,

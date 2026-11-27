@@ -9,7 +9,7 @@ COPY requirements.txt ./
 RUN python -m pip install --no-cache-dir -r requirements.txt \
     && useradd --system --uid 10001 --no-create-home audionet
 
-COPY main.py database.py storage.py exports.py ./
+COPY main.py database.py storage.py exports.py credits.py ./
 
 USER audionet
 
