@@ -1,3 +1,7 @@
+import base64
+import hashlib
+import hmac
+import json
 import logging
 import math
 import os
@@ -6,6 +10,7 @@ from typing import Literal
 from uuid import UUID
 
 import av
+import httpx
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 from pydantic import BaseModel
@@ -21,13 +26,14 @@ PACKS = {
     "hora": {"label": "Por hora", "seconds": 60 * 60, "amount_cents": 799},
 }
 CREDITS_MODE = os.getenv("AUDIONET_CREDITS_MODE", "disabled").lower()
-if CREDITS_MODE not in {"disabled", "simulated", "stripe_test", "stripe_live"}:
+SQUARE_MODES = {"square_test", "square_live"}
+if CREDITS_MODE not in {"disabled", "simulated", "stripe_test", "stripe_live"} | SQUARE_MODES:
     raise RuntimeError("Invalid AUDIONET_CREDITS_MODE")
 
 RECHARGES_PAUSED = os.getenv("AUDIONET_RECHARGES_PAUSED", "false").strip().lower() == "true"
 STRIPE_MODES = {"stripe_test", "stripe_live"}
 STRIPE_LIVE = CREDITS_MODE == "stripe_live"
-CREDIT_WALLET = "live" if STRIPE_LIVE else "test"
+CREDIT_WALLET = "live" if CREDITS_MODE in {"stripe_live", "square_live"} else "test"
 STRIPE_APPLICATION = f"audionet_{CREDIT_WALLET}_credits"
 STRIPE_KEY = os.getenv(f"AUDIONET_STRIPE_{CREDIT_WALLET.upper()}_SECRET_KEY", "")
 STRIPE_WEBHOOK_SECRET = os.getenv(f"AUDIONET_STRIPE_{CREDIT_WALLET.upper()}_WEBHOOK_SECRET", "")
@@ -37,8 +43,20 @@ if CREDITS_MODE in STRIPE_MODES and not (
     and STRIPE_WEBHOOK_SECRET.startswith("whsec_")
 ):
     raise RuntimeError(f"Stripe {CREDIT_WALLET} mode requires a matching API key and webhook secret")
-if STRIPE_LIVE and not PUBLIC_APP_URL.startswith("https://"):
-    raise RuntimeError("Stripe live mode requires an HTTPS public app URL")
+SQUARE_BASE = "https://connect.squareup.com" if CREDIT_WALLET == "live" else "https://connect.squareupsandbox.com"
+SQUARE_PREFIX = f"AUDIONET_SQUARE_{CREDIT_WALLET.upper()}"
+SQUARE_TOKEN = os.getenv(f"{SQUARE_PREFIX}_ACCESS_TOKEN", "")
+SQUARE_LOCATION = os.getenv(f"{SQUARE_PREFIX}_LOCATION_ID", "")
+SQUARE_MERCHANT = os.getenv(f"{SQUARE_PREFIX}_MERCHANT_ID", "")
+SQUARE_WEBHOOK_KEY = os.getenv(f"{SQUARE_PREFIX}_WEBHOOK_SIGNATURE_KEY", "")
+SQUARE_WEBHOOK_URL = os.getenv(f"{SQUARE_PREFIX}_WEBHOOK_URL", "")
+if CREDITS_MODE in SQUARE_MODES and not (
+    SQUARE_TOKEN and SQUARE_LOCATION and SQUARE_MERCHANT and SQUARE_WEBHOOK_KEY
+    and SQUARE_WEBHOOK_URL.startswith("https://")
+):
+    raise RuntimeError("Square requires credentials and an HTTPS webhook URL for the active environment")
+if CREDIT_WALLET == "live" and not PUBLIC_APP_URL.startswith("https://"):
+    raise RuntimeError("Live mode requires an HTTPS public app URL")
 
 
 class RechargeRequest(BaseModel):
@@ -93,6 +111,54 @@ def top_up(user_id, pack, kind, reference):
     }).execute().data
 
 
+def create_square_checkout(user_id, data, pack):
+    # Square's key is deterministic for a user, request, package and environment.
+    key = hashlib.sha256(
+        f"{CREDIT_WALLET}:{user_id}:{data.request_id}:{data.pack_id}".encode()
+    ).hexdigest()[:40]
+    try:
+        response = httpx.post(
+            f"{SQUARE_BASE}/v2/online-checkout/payment-links",
+            headers={"Authorization": f"Bearer {SQUARE_TOKEN}", "Square-Version": "2026-11-18"},
+            json={
+                "idempotency_key": key,
+                "quick_pay": {
+                    "name": f"AudioNet · {pack['seconds'] // 60} minutos",
+                    "location_id": SQUARE_LOCATION,
+                    "price_money": {"amount": pack["amount_cents"], "currency": "USD"},
+                },
+                "checkout_options": {
+                    "redirect_url": f"{PUBLIC_APP_URL}/dashboard/account?checkout=success",
+                    "allow_tipping": False,
+                },
+            },
+            timeout=12,
+        )
+        if not response.is_success:
+            errors = response.json().get("errors") or []
+            logger.warning("Square Checkout failed (status=%s, code=%s)",
+                           response.status_code, errors[0].get("code") if errors else None)
+            raise HTTPException(status_code=503, detail="Recharges are temporarily unavailable")
+        link = response.json()["payment_link"]
+        if not link["order_id"] or not link["url"].startswith("https://"):
+            raise ValueError("Incomplete Square payment link")
+        order = {
+            "wallet": CREDIT_WALLET, "order_id": link["order_id"], "user_id": user_id,
+            "location_id": SQUARE_LOCATION, "amount_cents": pack["amount_cents"],
+            "seconds": pack["seconds"], "label": pack["label"],
+        }
+        supabase.table("audionet_square_orders").upsert(
+            order, on_conflict="wallet,order_id", ignore_duplicates=True,
+        ).execute()
+        # Never send the buyer to Checkout until this order is registered.
+        return link["url"]
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("Square checkout setup failed (type=%s)", type(exc).__name__)
+        raise HTTPException(status_code=503, detail="Recharges are temporarily unavailable") from exc
+
+
 def build_credits_router(get_current_user):
     router = APIRouter(prefix="/credits", tags=["Credits"])
 
@@ -122,7 +188,10 @@ def build_credits_router(get_current_user):
                 .range(offset, offset + 25).execute().data
             )
 
-        recharge_kinds = ["stripe_live"] if STRIPE_LIVE else ["simulated", "stripe_test"]
+        recharge_kinds = (
+            ["stripe_live", "square_live"] if CREDIT_WALLET == "live"
+            else ["simulated", "stripe_test", "square_test"]
+        )
         recharges = movements(recharge_kinds, recharge_offset)
         usage = movements(["transcription"], usage_offset)
         return {
@@ -141,6 +210,9 @@ def build_credits_router(get_current_user):
         if RECHARGES_PAUSED:
             raise HTTPException(status_code=503, detail="Recharges are temporarily unavailable")
         pack = PACKS[data.pack_id]
+        if CREDITS_MODE in SQUARE_MODES:
+            url = create_square_checkout(user["id"], data, pack)
+            return {"mode": CREDITS_MODE, "checkout_url": url}
         if CREDITS_MODE == "simulated":
             added = top_up(user["id"], pack, "simulated", str(data.request_id))
             return {"mode": "simulated", "added": bool(added)}
@@ -176,6 +248,45 @@ def build_credits_router(get_current_user):
             )
             raise HTTPException(status_code=503, detail="Recharges are temporarily unavailable") from exc
         return {"mode": CREDITS_MODE, "checkout_url": session.url}
+
+    @router.post("/square/webhook")
+    async def square_webhook(request: Request):
+        if CREDITS_MODE not in SQUARE_MODES:
+            raise HTTPException(status_code=404, detail="Webhook unavailable")
+        body = await request.body()
+        digest = hmac.new(
+            SQUARE_WEBHOOK_KEY.encode(), SQUARE_WEBHOOK_URL.encode() + body, hashlib.sha256
+        ).digest()
+        expected = base64.b64encode(digest)
+        signature = request.headers.get("x-square-hmacsha256-signature", "").encode()
+        if not hmac.compare_digest(expected, signature):
+            raise HTTPException(status_code=400, detail="Invalid Square signature")
+        try:
+            event = json.loads(body)
+        except (ValueError, UnicodeError) as exc:
+            raise HTTPException(status_code=400, detail="Invalid Square event") from exc
+        if event.get("merchant_id") != SQUARE_MERCHANT or event.get("type") not in {
+            "payment.created", "payment.updated"
+        }:
+            return {"received": True}
+        payment = (event.get("data") or {}).get("object", {}).get("payment") or {}
+        if (
+            payment.get("status") != "COMPLETED"
+            or payment.get("location_id") != SQUARE_LOCATION
+            or not payment.get("id")
+            or not payment.get("order_id")
+        ):
+            return {"received": True}
+        money = payment.get("amount_money") or {}
+        await run_in_threadpool(lambda: supabase.rpc("an_credit_square_payment", {
+            "p_wallet": CREDIT_WALLET,
+            "p_order_id": payment["order_id"],
+            "p_payment_id": payment["id"],
+            "p_location_id": payment["location_id"],
+            "p_amount_cents": money.get("amount"),
+            "p_currency": money.get("currency"),
+        }).execute())
+        return {"received": True}
 
     @router.post("/stripe/webhook")
     async def stripe_webhook(request: Request):

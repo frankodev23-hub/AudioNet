@@ -10,7 +10,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 type Movement = { id: number; kind: string; label: string; seconds: number; amount_cents: number; created_at: string };
 type Pack = { id: string; label: string; seconds: number; amount_cents: number };
 type Wallet = {
-  mode: "disabled" | "simulated" | "stripe_test" | "stripe_live";
+  mode: "disabled" | "simulated" | "stripe_test" | "stripe_live" | "square_test" | "square_live";
   available_seconds: number;
   reserved_seconds: number;
   used_seconds: number;
@@ -72,7 +72,7 @@ export default function AccountPage() {
     const controller = new AbortController();
     const checkout = new URLSearchParams(window.location.search).get("checkout");
     if (checkout === "success") {
-      setNotice("Stripe completó el proceso de pago. Actualiza el saldo si el abono aún no aparece.");
+      setNotice("Volviste del pago. Actualiza el saldo para confirmar la recarga.");
     } else if (checkout === "cancelled") {
       setNotice("Recarga cancelada.");
     }
@@ -118,7 +118,7 @@ export default function AccountPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(lastAttempt.current),
       });
-      if ((result.mode === "stripe_test" || result.mode === "stripe_live") && result.checkout_url) {
+      if (result.checkout_url && ["stripe_test", "stripe_live", "square_test", "square_live"].includes(result.mode)) {
         window.location.assign(result.checkout_url);
         return;
       }
@@ -216,7 +216,7 @@ export default function AccountPage() {
             </section>
             <section className="mt-7">
               <h2 className="text-lg font-bold">{t("Recargar créditos")}</h2>
-              <p className="mt-1 text-sm text-slate-600">{t(wallet.packs.length === 0 ? rechargesUnavailable : wallet.mode === "simulated" ? "Modo simulado. Las recargas no generan cargos." : wallet.mode === "stripe_test" ? "Stripe en modo de prueba. Usa una tarjeta de prueba." : "Paga con tarjeta en Stripe.")}</p>
+              <p className="mt-1 text-sm text-slate-600">{t(wallet.packs.length === 0 ? rechargesUnavailable : wallet.mode === "simulated" ? "Modo simulado. Las recargas no generan cargos." : wallet.mode === "stripe_test" ? "Stripe en modo de prueba. Usa una tarjeta de prueba." : wallet.mode === "square_test" ? "Square en modo de prueba." : wallet.mode === "square_live" ? "Paga con tarjeta en Square." : "Paga con tarjeta en Stripe.")}</p>
               <div className="mt-3 grid gap-3 sm:grid-cols-2">
                 {wallet.packs.map((pack) => (
                   <article key={pack.id} className="flex flex-wrap items-end justify-between gap-4 rounded-2xl border border-slate-200 bg-white p-5">
@@ -226,7 +226,7 @@ export default function AccountPage() {
                       <p className="mt-1 text-sm text-slate-600">{money.format(pack.amount_cents / 100)}</p>
                     </div>
                     <button disabled={!!pending} onClick={() => recharge(pack.id)} className="rounded-lg bg-blue-700 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-800 disabled:opacity-50">
-                      {t(pending === pack.id ? "Procesando..." : wallet.mode === "simulated" ? "Simular recarga" : wallet.mode === "stripe_test" ? "Abrir Stripe de prueba" : "Pagar con Stripe")}
+                      {t(pending === pack.id ? "Procesando..." : wallet.mode === "simulated" ? "Simular recarga" : wallet.mode === "stripe_test" ? "Abrir Stripe de prueba" : wallet.mode === "square_test" ? "Abrir Square de prueba" : wallet.mode === "square_live" ? "Pagar con Square" : "Pagar con Stripe")}
                     </button>
                   </article>
                 ))}
