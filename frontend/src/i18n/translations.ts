@@ -11,6 +11,7 @@ export const translations: Record<Locale, Record<string, string>> = {
     "Tiempo consumido": "Tiempo consumido",
     "Desde la activación de los créditos": "Desde la activación de los créditos",
     "Recargar créditos": "Recargar créditos",
+    "Las recargas no están disponibles en este momento.": "Las recargas no están disponibles en este momento.",
     "Modo simulado. Las recargas no generan cargos.": "Modo simulado. Las recargas no generan cargos.",
     "Stripe en modo de prueba. Usa una tarjeta de prueba.": "Stripe en modo de prueba. Usa una tarjeta de prueba.",
     "Por hora": "Por hora",
@@ -244,6 +245,7 @@ export const translations: Record<Locale, Record<string, string>> = {
   },
 
   en: {
+    "Las recargas no están disponibles en este momento.": "Top-ups are temporarily unavailable.",
     "Siguiente": "Next",
     "Anterior": "Previous",
     "Saldo disponible": "Available balance",

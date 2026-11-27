@@ -1,3 +1,4 @@
+import logging
 import math
 import os
 from pathlib import Path
@@ -12,6 +13,8 @@ from starlette.concurrency import run_in_threadpool
 
 from database import supabase
 
+logger = logging.getLogger(__name__)
+
 # Currency and quantities are determined by the API, never by the browser.
 PACKS = {
     "inicio": {"label": "Inicio", "seconds": 45 * 60, "amount_cents": 599},
@@ -21,6 +24,7 @@ CREDITS_MODE = os.getenv("AUDIONET_CREDITS_MODE", "disabled").lower()
 if CREDITS_MODE not in {"disabled", "simulated", "stripe_test", "stripe_live"}:
     raise RuntimeError("Invalid AUDIONET_CREDITS_MODE")
 
+RECHARGES_PAUSED = os.getenv("AUDIONET_RECHARGES_PAUSED", "false").strip().lower() == "true"
 STRIPE_MODES = {"stripe_test", "stripe_live"}
 STRIPE_LIVE = CREDITS_MODE == "stripe_live"
 CREDIT_WALLET = "live" if STRIPE_LIVE else "test"
@@ -125,7 +129,7 @@ def build_credits_router(get_current_user):
             "mode": CREDITS_MODE,
             **summary,
             "available_seconds": summary["balance_seconds"] - summary["reserved_seconds"],
-            "packs": [{"id": pack_id, **pack} for pack_id, pack in PACKS.items()],
+            "packs": [] if RECHARGES_PAUSED else [{"id": pack_id, **pack} for pack_id, pack in PACKS.items()],
             "recharges": recharges[:25],
             "usage": usage[:25],
             "more_recharges": len(recharges) > 25,
@@ -134,6 +138,8 @@ def build_credits_router(get_current_user):
 
     @router.post("/recharges")
     def recharge(data: RechargeRequest, user: dict = Depends(get_current_user)):
+        if RECHARGES_PAUSED:
+            raise HTTPException(status_code=503, detail="Recharges are temporarily unavailable")
         pack = PACKS[data.pack_id]
         if CREDITS_MODE == "simulated":
             added = top_up(user["id"], pack, "simulated", str(data.request_id))
@@ -146,22 +152,29 @@ def build_credits_router(get_current_user):
         product_name = f"AudioNet · {pack['seconds'] // 60} minutos"
         if not STRIPE_LIVE:
             product_name += " de prueba"
-        session = stripe_client.v1.checkout.sessions.create({
-            "mode": "payment",
-            "payment_method_types": ["card"],
-            "line_items": [{
-                "price_data": {
-                    "currency": "usd",
-                    "unit_amount": pack["amount_cents"],
-                    "product_data": {"name": product_name},
-                },
-                "quantity": 1,
-            }],
-            "client_reference_id": user["id"],
-            "metadata": {"application": STRIPE_APPLICATION, "pack_id": data.pack_id},
-            "success_url": f"{PUBLIC_APP_URL}/dashboard/account?checkout=success",
-            "cancel_url": f"{PUBLIC_APP_URL}/dashboard/account?checkout=cancelled",
-        }, options={"idempotency_key": f"audionet:{user['id']}:{data.request_id}"})
+        try:
+            session = stripe_client.v1.checkout.sessions.create({
+                "mode": "payment",
+                "payment_method_types": ["card"],
+                "line_items": [{
+                    "price_data": {
+                        "currency": "usd",
+                        "unit_amount": pack["amount_cents"],
+                        "product_data": {"name": product_name},
+                    },
+                    "quantity": 1,
+                }],
+                "client_reference_id": user["id"],
+                "metadata": {"application": STRIPE_APPLICATION, "pack_id": data.pack_id},
+                "success_url": f"{PUBLIC_APP_URL}/dashboard/account?checkout=success",
+                "cancel_url": f"{PUBLIC_APP_URL}/dashboard/account?checkout=cancelled",
+            }, options={"idempotency_key": f"audionet:{user['id']}:{data.request_id}"})
+        except stripe.StripeError as exc:
+            logger.warning(
+                "Stripe Checkout creation failed (type=%s, status=%s, request_id=%s)",
+                type(exc).__name__, exc.http_status, exc.request_id,
+            )
+            raise HTTPException(status_code=503, detail="Recharges are temporarily unavailable") from exc
         return {"mode": CREDITS_MODE, "checkout_url": session.url}
 
     @router.post("/stripe/webhook")
