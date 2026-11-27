@@ -6,14 +6,13 @@ import logging
 import math
 import os
 from pathlib import Path
-from typing import Literal
 from uuid import UUID
 
 import av
 import httpx
 import stripe
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from starlette.concurrency import run_in_threadpool
 
 from database import supabase
@@ -60,7 +59,7 @@ if CREDIT_WALLET == "live" and not PUBLIC_APP_URL.startswith("https://"):
 
 
 class RechargeRequest(BaseModel):
-    pack_id: Literal["inicio", "hora"]
+    pack_id: str = Field(min_length=1, max_length=64)
     request_id: UUID
 
 
@@ -159,6 +158,18 @@ def create_square_checkout(user_id, data, pack):
         raise HTTPException(status_code=503, detail="Recharges are temporarily unavailable") from exc
 
 
+def available_recharge_packs(user_id):
+    if CREDITS_MODE in SQUARE_MODES:
+        return supabase.rpc("an_available_recharge_packages", {
+            "p_user": user_id,
+            "p_wallet": CREDIT_WALLET,
+            "p_paused": RECHARGES_PAUSED,
+        }).execute().data
+    if RECHARGES_PAUSED:
+        return []
+    return [{"id": pack_id, **pack} for pack_id, pack in PACKS.items()]
+
+
 def build_credits_router(get_current_user):
     router = APIRouter(prefix="/credits", tags=["Credits"])
 
@@ -198,7 +209,7 @@ def build_credits_router(get_current_user):
             "mode": CREDITS_MODE,
             **summary,
             "available_seconds": summary["balance_seconds"] - summary["reserved_seconds"],
-            "packs": [] if RECHARGES_PAUSED else [{"id": pack_id, **pack} for pack_id, pack in PACKS.items()],
+            "packs": available_recharge_packs(user_id),
             "recharges": recharges[:25],
             "usage": usage[:25],
             "more_recharges": len(recharges) > 25,
@@ -207,9 +218,12 @@ def build_credits_router(get_current_user):
 
     @router.post("/recharges")
     def recharge(data: RechargeRequest, user: dict = Depends(get_current_user)):
-        if RECHARGES_PAUSED:
+        packs = available_recharge_packs(user["id"])
+        if not packs:
             raise HTTPException(status_code=503, detail="Recharges are temporarily unavailable")
-        pack = PACKS[data.pack_id]
+        pack = next((item for item in packs if item["id"] == data.pack_id), None)
+        if pack is None:
+            raise HTTPException(status_code=404, detail="Recharge package unavailable. Refresh your balance.")
         if CREDITS_MODE in SQUARE_MODES:
             url = create_square_checkout(user["id"], data, pack)
             return {"mode": CREDITS_MODE, "checkout_url": url}
